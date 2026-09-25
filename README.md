@@ -286,8 +286,9 @@ be edited after the fact.
 
 The risk engine (Phase 7) checks these before every order and rejects any order
 that would break one, whatever a strategy or agent says. The platform brief adds
-percentage-based limits; how the two sets combine is an open question for you in
-[BUILD_PLAN.md](BUILD_PLAN.md#6-questions-for-the-operator).
+percentage-based limits; as you decided, they will be tuned to match these (1% risk
+per trade, 5% daily loss, 20% drawdown). See
+[BUILD_PLAN.md](BUILD_PLAN.md#6-operator-decisions).
 
 ---
 
