@@ -1,9 +1,10 @@
-"""Read Alpaca API keys from the .env file, without ever showing them.
+"""Read secrets from the .env file, without ever showing them.
 
-Keys live only in .env, which git ignores. This module reads that file,
-checks that the keys the bot needs are filled in, and hides them
-whenever they're printed. Paper and live keys have different names, so
-paper mode can never pick up your real-money keys by accident.
+Secrets (Alpaca keys, the database password, the API token) live only in
+.env, which git ignores. This module reads that file, checks that the
+secrets the bot needs are filled in, and hides keys whenever they're
+printed. Paper and live keys have different names, so paper mode can
+never pick up your real-money keys by accident.
 
 Everything comes from the .env file itself, not from environment
 variables. That way LIVE_TRADING can only be switched on in .env, as the
@@ -27,8 +28,12 @@ DEFAULT_ENV_PATH = PROJECT_ROOT / ".env"
 
 PAPER_KEY_NAMES = ("ALPACA_PAPER_API_KEY", "ALPACA_PAPER_SECRET_KEY")
 LIVE_KEY_NAMES = ("ALPACA_LIVE_API_KEY", "ALPACA_LIVE_SECRET_KEY")
-SECRET_NAMES = PAPER_KEY_NAMES + LIVE_KEY_NAMES
+# Names of settings in .env, not secrets themselves.
+DB_PASSWORD_NAME = "POSTGRES_PASSWORD"  # noqa: S105
+API_TOKEN_NAME = "ADMIN_API_TOKEN"  # noqa: S105
+SECRET_NAMES = (*PAPER_KEY_NAMES, *LIVE_KEY_NAMES, DB_PASSWORD_NAME, API_TOKEN_NAME)
 LIVE_SWITCH_NAME = "LIVE_TRADING"
+MIN_API_TOKEN_LENGTH = 32
 
 Account = Literal["paper", "live"]
 
@@ -124,6 +129,34 @@ def _load_keys(env: Mapping[str, str], account: Account) -> AlpacaKeys:
     )
 
 
+def load_database_password(env: Mapping[str, str]) -> str:
+    """The PostgreSQL password. Required by everything that uses the database."""
+    password = env.get(DB_PASSWORD_NAME, "").strip()
+    if not password:
+        raise CredentialsError(
+            f"{DB_PASSWORD_NAME} is empty or missing in .env. Make one up (a long random "
+            "string: see .env.example) and use the same value for the database container."
+        )
+    return password
+
+
+def load_api_token(env: Mapping[str, str]) -> str | None:
+    """The token that protects the API, or None when it isn't set.
+
+    Without a token the protected API endpoints refuse every request. A token
+    shorter than MIN_API_TOKEN_LENGTH is refused outright.
+    """
+    token = env.get(API_TOKEN_NAME, "").strip()
+    if not token:
+        return None
+    if len(token) < MIN_API_TOKEN_LENGTH:
+        raise CredentialsError(
+            f"{API_TOKEN_NAME} must be at least {MIN_API_TOKEN_LENGTH} characters long. "
+            'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    return token
+
+
 def live_trading_switch_on(env: Mapping[str, str]) -> bool:
     """True only if .env says LIVE_TRADING=true (capital letters don't matter).
 
@@ -133,7 +166,7 @@ def live_trading_switch_on(env: Mapping[str, str]) -> bool:
 
 
 def secret_values(env: Mapping[str, str]) -> list[str]:
-    """Every key value present in .env, so the logger can hide them all."""
+    """Every secret value present in .env, so the logger can hide them all."""
     return [env[name] for name in SECRET_NAMES if env.get(name)]
 
 

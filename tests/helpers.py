@@ -6,14 +6,23 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Obviously fake keys, used only by tests.
+# Obviously fake secrets, used only by tests.
 FAKE_PAPER_KEY = "PKTESTFAKEPAPERKEY0001"
 FAKE_PAPER_SECRET = "fake-paper-secret-value-for-tests-only"
 FAKE_LIVE_KEY = "AKTESTFAKELIVEKEY00001"
 FAKE_LIVE_SECRET = "fake-live-secret-value-for-tests-only"
+FAKE_DB_PASSWORD = "fake-db-password-for-tests"
+FAKE_API_TOKEN = "fake-api-token-for-tests-0123456789abcdef"
 
 
-def env_text(*, paper: bool = True, live_keys: bool = False, live_trading: str = "false") -> str:
+def env_text(
+    *,
+    paper: bool = True,
+    live_keys: bool = False,
+    live_trading: str = "false",
+    db_password: str = FAKE_DB_PASSWORD,
+    api_token: str = FAKE_API_TOKEN,
+) -> str:
     """The text of a .env file for a test."""
     lines = [
         f"ALPACA_PAPER_API_KEY={FAKE_PAPER_KEY if paper else ''}",
@@ -21,5 +30,7 @@ def env_text(*, paper: bool = True, live_keys: bool = False, live_trading: str =
         f"ALPACA_LIVE_API_KEY={FAKE_LIVE_KEY if live_keys else ''}",
         f"ALPACA_LIVE_SECRET_KEY={FAKE_LIVE_SECRET if live_keys else ''}",
         f"LIVE_TRADING={live_trading}",
+        f"POSTGRES_PASSWORD={db_password}",
+        f"ADMIN_API_TOKEN={api_token}",
     ]
     return "\n".join(lines) + "\n"

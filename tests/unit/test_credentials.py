@@ -7,9 +7,12 @@ import os
 import pytest
 
 from strata.credentials import (
+    MIN_API_TOKEN_LENGTH,
     AlpacaKeys,
     CredentialsError,
     live_trading_switch_on,
+    load_api_token,
+    load_database_password,
     load_live_keys,
     load_paper_keys,
     looks_like_paper_key,
@@ -17,6 +20,8 @@ from strata.credentials import (
     secret_values,
 )
 from tests.helpers import (
+    FAKE_API_TOKEN,
+    FAKE_DB_PASSWORD,
     FAKE_LIVE_KEY,
     FAKE_LIVE_SECRET,
     FAKE_PAPER_KEY,
@@ -116,7 +121,8 @@ def test_malformed_line_is_refused_without_showing_it(write_env):
     text = env_text() + "oops SECRETVALUE123 pasted without a name\n"
     with pytest.raises(CredentialsError) as info:
         read_env_file(write_env(text))
-    assert "line(s) 6" in str(info.value)
+    bad_line = text.count("\n")  # the last line of the file
+    assert f"line(s) {bad_line}" in str(info.value)
     assert "SECRETVALUE123" not in str(info.value)
 
 
@@ -160,7 +166,34 @@ def test_secret_values_lists_every_key(write_env):
         FAKE_PAPER_SECRET,
         FAKE_LIVE_KEY,
         FAKE_LIVE_SECRET,
+        FAKE_DB_PASSWORD,
+        FAKE_API_TOKEN,
     }
+
+
+def test_database_password_is_read(write_env):
+    assert load_database_password(read_env_file(write_env(env_text()))) == FAKE_DB_PASSWORD
+
+
+@pytest.mark.parametrize("password", ["", "   "])
+def test_missing_database_password_is_refused(write_env, password):
+    env = read_env_file(write_env(env_text(db_password=password)))
+    with pytest.raises(CredentialsError, match="POSTGRES_PASSWORD"):
+        load_database_password(env)
+
+
+def test_api_token_is_read(write_env):
+    assert load_api_token(read_env_file(write_env(env_text()))) == FAKE_API_TOKEN
+
+
+def test_missing_api_token_means_none(write_env):
+    assert load_api_token(read_env_file(write_env(env_text(api_token="")))) is None
+
+
+def test_short_api_token_is_refused(write_env):
+    short = "x" * (MIN_API_TOKEN_LENGTH - 1)
+    with pytest.raises(CredentialsError, match="at least 32 characters"):
+        load_api_token(read_env_file(write_env(env_text(api_token=short))))
 
 
 def test_paper_key_shape_hint():
