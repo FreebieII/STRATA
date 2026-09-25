@@ -5,7 +5,8 @@
 #
 # Two targets:
 #   runtime  what the services run (the default)
-#   test     runtime plus the test tools and tests: docker compose --profile test run --rm tests
+#   test     runtime plus the test tools and tests:
+#            docker compose --profile test run --build --rm tests
 #
 # Secrets are never copied into the image: .dockerignore excludes .env, and
 # docker compose mounts it read-only at /run/secrets/strata_env at run time.

@@ -155,7 +155,7 @@ few prices. It's the first real test of your keys.
 ### 6. Run the tests
 
 ```bash
-docker compose --profile test run --rm tests
+docker compose --profile test run --build --rm tests
 ```
 
 ### 7. Getting each new phase
@@ -163,7 +163,7 @@ docker compose --profile test run --rm tests
 ```bash
 git pull
 docker compose up --build -d
-docker compose --profile test run --rm tests
+docker compose --profile test run --build --rm tests
 ```
 
 Stop everything with `docker compose down` (your data is kept).
@@ -311,7 +311,7 @@ shows the tested behaviour is there.
 **Test it**
 
 - [ ] The full test suite passes on the machine that will trade
-      (`docker compose --profile test run --rm tests`).
+      (`docker compose --profile test run --build --rm tests`).
 - [ ] `python check_setup.py --connect` shows no `[FAIL]` lines, and broker
       connectivity and credentials are verified against the paper account.
 - [ ] I've seen each risk limit reject an order, and the kill switch stop all

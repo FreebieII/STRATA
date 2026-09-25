@@ -4,7 +4,7 @@
 #   docker compose ps                 see what is running and healthy
 #   docker compose logs -f api        follow the API's log
 #   docker compose down               stop everything (data is kept)
-#   docker compose --profile test run --rm tests    run the full test suite
+#   docker compose --profile test run --build --rm tests    run the full test suite
 #
 # Needs a .env file next to this one (copy .env.example) with at least
 # POSTGRES_PASSWORD set. Every published port listens on 127.0.0.1 only, so

@@ -126,4 +126,5 @@ docker compose ps
 | `Permission denied` reading `/run/secrets/strata_env` | Your user ID isn't 1000: rebuild with `STRATA_UID`/`STRATA_GID` (above). |
 | `port is already allocated` | Something else uses 5432, 6379 or 8000 (often a local PostgreSQL). Stop it, or change the left-hand port in `docker-compose.yml`. |
 | `api` stays unhealthy | `docker compose logs api` and `docker compose logs migrate`. |
+| `password authentication failed` after changing `POSTGRES_PASSWORD` | PostgreSQL keeps the password it was created with. Put the old one back in `.env`, or set the new one inside the database: `docker compose exec postgres psql -U strata -d strata -c "ALTER USER strata PASSWORD 'the-new-password'"`. With no data worth keeping yet, `docker compose down -v` starts afresh. |
 | `Unknown STRATA_ variable(s)` | A `STRATA_` variable is misspelled; the table above lists the valid ones. |

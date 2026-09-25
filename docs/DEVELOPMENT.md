@@ -46,7 +46,7 @@ export STRATA_TEST_REDIS_URL="redis://127.0.0.1:6379/15"
 pytest
 ```
 
-Or run everything inside Docker: `docker compose --profile test run --rm tests`.
+Or run everything inside Docker: `docker compose --profile test run --build --rm tests`.
 
 Integration tests create a throwaway database (`strata_test_<random>`), apply the
 real migrations to it and drop it afterwards. They never touch the `strata`
