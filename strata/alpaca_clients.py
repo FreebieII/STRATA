@@ -13,7 +13,7 @@ rules always hold:
 
 from __future__ import annotations
 
-from typing import TypeVar
+from typing import Any
 
 import requests
 from alpaca.data.historical import CryptoHistoricalDataClient, StockHistoricalDataClient
@@ -24,7 +24,9 @@ from .credentials import AlpacaKeys
 # (seconds to connect, seconds to wait for a reply)
 REQUEST_TIMEOUT: tuple[float, float] = (10.0, 30.0)
 
-_Client = TypeVar("_Client")
+# requests.Session.request(method, url, params, data, headers, cookies, files,
+# auth, timeout, ...): timeout is the 7th argument after method and url.
+_TIMEOUT_POSITION = 7
 
 
 class TimeoutSession(requests.Session):
@@ -34,12 +36,17 @@ class TimeoutSession(requests.Session):
         super().__init__()
         self.timeout = timeout
 
-    def request(self, method, url, **kwargs):  # type: ignore[override]
-        kwargs.setdefault("timeout", self.timeout)
-        return super().request(method, url, **kwargs)
+    def request(
+        self, method: str | bytes, url: str | bytes, *args: Any, **kwargs: Any
+    ) -> requests.Response:
+        if len(args) < _TIMEOUT_POSITION:  # timeout wasn't passed by position
+            kwargs.setdefault("timeout", self.timeout)
+        return super().request(method, url, *args, **kwargs)
 
 
-def trading_client(keys: AlpacaKeys, timeout: tuple[float, float] = REQUEST_TIMEOUT) -> TradingClient:
+def trading_client(
+    keys: AlpacaKeys, timeout: tuple[float, float] = REQUEST_TIMEOUT
+) -> TradingClient:
     """Orders, positions, account and market clock."""
     client = TradingClient(keys.api_key, keys.secret_key, paper=keys.is_paper)
     return _with_timeout(client, timeout)
@@ -59,7 +66,7 @@ def crypto_data_client(
     return _with_timeout(CryptoHistoricalDataClient(keys.api_key, keys.secret_key), timeout)
 
 
-def _with_timeout(client: _Client, timeout: tuple[float, float]) -> _Client:
+def _with_timeout[C](client: C, timeout: tuple[float, float]) -> C:
     # alpaca-py (version pinned in requirements.txt) sends every request
     # through `client._session`. Swap in a session that has a time limit.
     old = getattr(client, "_session", None)

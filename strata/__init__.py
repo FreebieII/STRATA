@@ -13,6 +13,8 @@ Later stages add the backtester, the risk manager and the trading loop.
 
 from pathlib import Path
 
+__version__ = "0.1.0"
+
 # The project folder (the one holding main.py and config.yaml). Default
 # file locations are relative to it, so commands work from any folder.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

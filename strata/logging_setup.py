@@ -23,7 +23,7 @@ MAIN_LOG_NAME = "strata.log"
 DECISIONS_LOG_NAME = "decisions.log"
 
 _MAX_BYTES = 5_000_000  # start a fresh file after about 5 MB...
-_BACKUPS = 20           # ...and keep the 20 newest old files
+_BACKUPS = 20  # ...and keep the 20 newest old files
 
 _secrets: set[str] = set()
 _installed: list[tuple[logging.Logger, logging.Handler]] = []
@@ -50,7 +50,7 @@ class _RedactingFormatter(logging.Formatter):
         super().__init__(fmt)
         self._tz = tz
 
-    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:  # noqa: N802
         moment = datetime.fromtimestamp(record.created, tz=self._tz)
         if self._tz is None:
             moment = moment.astimezone()  # the computer's own time zone

@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Mapping
-from enum import Enum
+from enum import StrEnum
 
 from .config import RiskLimits
 from .credentials import AlpacaKeys, CredentialsError, live_trading_switch_on, load_live_keys
 
 
-class Mode(str, Enum):
+class Mode(StrEnum):
     BACKTEST = "backtest"
     PAPER = "paper"
     LIVE = "live"
@@ -87,8 +87,7 @@ def unlock_live_mode(
     ask = ask or input
     try:
         typed = ask(
-            "Type this phrase exactly, then press Enter:\n"
-            f"    {LIVE_CONFIRMATION_PHRASE}\n> "
+            f"Type this phrase exactly, then press Enter:\n    {LIVE_CONFIRMATION_PHRASE}\n> "
         )
     except EOFError:
         typed = ""

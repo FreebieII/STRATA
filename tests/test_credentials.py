@@ -26,7 +26,7 @@ from tests.helpers import (
 
 
 def test_missing_env_file_explains_how_to_create_it(tmp_path):
-    with pytest.raises(CredentialsError, match="cp .env.example .env"):
+    with pytest.raises(CredentialsError, match=r"cp \.env\.example \.env"):
         read_env_file(tmp_path / ".env")
 
 

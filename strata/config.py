@@ -17,7 +17,7 @@ import re
 from collections.abc import Hashable
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
@@ -35,13 +35,13 @@ from . import PROJECT_ROOT
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 
 MIN_BACKTEST_YEARS = 3  # the whole backtest, start_date to end_date
-MIN_SPLIT_YEARS = 1     # each side of the in-sample / out-of-sample split
+MIN_SPLIT_YEARS = 1  # each side of the in-sample / out-of-sample split
 
 AssetClass = Literal["stock", "crypto"]
 StrategyName = Literal["ma_crossover", "rsi_reversion"]
 
-_STOCK_SYMBOL = re.compile(r"^[A-Z][A-Z0-9.]{0,9}$")   # SPY, BRK.B
-_CRYPTO_SYMBOL = re.compile(r"^[A-Z0-9]{2,10}/USD$")   # BTC/USD
+_STOCK_SYMBOL = re.compile(r"^[A-Z][A-Z0-9.]{0,9}$")  # SPY, BRK.B
+_CRYPTO_SYMBOL = re.compile(r"^[A-Z0-9]{2,10}/USD$")  # BTC/USD
 
 
 class ConfigError(Exception):
@@ -77,9 +77,7 @@ class Instrument(_Section):
                 f"crypto symbol {self.symbol!r} must be a US-dollar pair such as BTC/USD"
             )
         if self.asset_class == "stock" and not _STOCK_SYMBOL.match(self.symbol):
-            raise ValueError(
-                f"stock symbol {self.symbol!r} doesn't look like a ticker such as SPY"
-            )
+            raise ValueError(f"stock symbol {self.symbol!r} doesn't look like a ticker such as SPY")
         return self
 
 
@@ -228,9 +226,7 @@ class Config(_Section):
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError, OSError):
-            raise ValueError(
-                f"unknown time zone {value!r} (example: America/New_York)"
-            ) from None
+            raise ValueError(f"unknown time zone {value!r} (example: America/New_York)") from None
         return value
 
     @model_validator(mode="after")
@@ -262,7 +258,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
         raise ConfigError(f"Config file not found: {path}")
     try:
         with path.open(encoding="utf-8") as fh:
-            raw = yaml.load(fh, Loader=_StrictYamlLoader)  # a SafeLoader, see below
+            # _StrictYamlLoader is a SafeLoader subclass (see below), so this is safe.
+            raw = yaml.load(fh, Loader=_StrictYamlLoader)  # noqa: S506
     except (yaml.YAMLError, UnicodeDecodeError) as exc:
         raise ConfigError(f"{path} could not be read:\n{exc}") from exc
     if not isinstance(raw, dict):
@@ -304,8 +301,8 @@ class _StrictYamlLoader(yaml.SafeLoader):
     second 'MAX_CAPITAL: 3000' lower down the file would quietly win.
     """
 
-    def construct_mapping(self, node, deep=False):
-        seen = set()
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Hashable, Any]:
+        seen: set[Hashable] = set()
         for key_node, _value_node in node.value:
             if key_node.tag == "tag:yaml.org,2002:merge":
                 continue

@@ -16,12 +16,19 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from importlib import metadata
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # only for type checking; imported lazily at run time
+    from alpaca.trading.client import TradingClient
+
+    from strata.config import Config, Instrument
+    from strata.credentials import AlpacaKeys
 
 ROOT = Path(__file__).resolve().parent
-MIN_PYTHON = (3, 11)
+MIN_PYTHON = (3, 12)
 
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 _TAGS = {OK: "[ OK ]", WARN: "[WARN]", FAIL: "[FAIL]"}
@@ -50,15 +57,35 @@ def check_python(version: tuple[int, ...] = tuple(sys.version_info[:3])) -> Chec
     return Check(FAIL, "Python", f"{shown} is too old; install Python {wanted} or newer")
 
 
-def pinned_requirements(path: Path = ROOT / "requirements.txt") -> dict[str, str]:
-    """{package: version} for every 'name==version' line in requirements.txt."""
-    pins = {}
+_PIN = re.compile(r"([A-Za-z0-9_.\-]+)==([A-Za-z0-9_.\-+!]+)\s*(?:;(.*))?")
+
+
+def requirement_lines(path: Path = ROOT / "requirements.txt") -> list[tuple[str, str, str | None]]:
+    """(package, version, platform condition or None) for each package in a lock file.
+
+    The lock files are made by `uv pip compile --generate-hashes`: each package
+    line may end in a backslash and is followed by `--hash=...` lines.
+    """
+    found = []
     for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.split("#", 1)[0].strip()
-        match = re.fullmatch(r"([A-Za-z0-9_.\-]+)==([A-Za-z0-9_.\-]+)", line)
-        if match:
-            pins[match.group(1)] = match.group(2)
-    return pins
+        line = raw.strip().removesuffix("\\").strip()
+        if not line or line.startswith(("#", "--")):
+            continue
+        match = _PIN.fullmatch(line)
+        if not match:
+            raise ValueError(f"{path.name}: can't read the line {line!r}")
+        marker = match.group(3).strip() if match.group(3) else None
+        found.append((match.group(1), match.group(2), marker))
+    return found
+
+
+def pinned_requirements(path: Path = ROOT / "requirements.txt") -> dict[str, str]:
+    """{package: version} for the packages every platform installs.
+
+    Packages with a platform condition (for example Windows-only ones) are
+    left out, because they are rightly missing elsewhere.
+    """
+    return {name: version for name, version, marker in requirement_lines(path) if marker is None}
 
 
 def check_packages() -> list[Check]:
@@ -68,7 +95,9 @@ def check_packages() -> list[Check]:
             installed = metadata.version(name)
         except metadata.PackageNotFoundError:
             problems.append(
-                Check(FAIL, f"package {name}", "not installed. Run: pip install -r requirements.txt")
+                Check(
+                    FAIL, f"package {name}", "not installed. Run: pip install -r requirements.txt"
+                )
             )
             continue
         if installed != wanted:
@@ -87,7 +116,7 @@ def check_packages() -> list[Check]:
     return problems
 
 
-def check_config(path: Path):
+def check_config(path: Path) -> tuple[list[Check], Config | None]:
     from strata.config import ConfigError, load_config
 
     try:
@@ -115,7 +144,7 @@ def check_config(path: Path):
     return checks, config
 
 
-def check_env(path: Path):
+def check_env(path: Path) -> tuple[list[Check], dict[str, str] | None]:
     from strata.credentials import (
         LIVE_KEY_NAMES,
         CredentialsError,
@@ -165,7 +194,9 @@ def check_env(path: Path):
 
     if any(env.get(name) for name in LIVE_KEY_NAMES):
         checks.append(
-            Check(WARN, "live keys", "are filled in. Leave them empty until you are ready to go live.")
+            Check(
+                WARN, "live keys", "are filled in. Leave them empty until you are ready to go live."
+            )
         )
     else:
         checks.append(Check(OK, "live keys", "empty, as they should be until you go live"))
@@ -178,7 +209,9 @@ def check_env_not_in_git(root: Path = ROOT) -> Check:
         tracked = subprocess.run(
             ["git", "ls-files", "--error-unmatch", ".env"], cwd=root, capture_output=True
         )
-        ignored = subprocess.run(["git", "check-ignore", "-q", ".env"], cwd=root, capture_output=True)
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", ".env"], cwd=root, capture_output=True
+        )
     except OSError:
         return Check(WARN, name, "git isn't installed, so this couldn't be checked")
     if tracked.returncode == 0:
@@ -200,7 +233,9 @@ def check_env_not_in_git(root: Path = ROOT) -> Check:
 # ---------------------------------------------------------------------------
 
 
-def check_connection(config, env) -> list[Check]:
+def check_connection(config: Config, env: dict[str, str]) -> list[Check]:
+    from alpaca.trading.models import Clock, TradeAccount
+
     from strata.alpaca_clients import trading_client
     from strata.credentials import load_paper_keys
 
@@ -210,6 +245,8 @@ def check_connection(config, env) -> list[Check]:
         account = client.get_account()
     except Exception as exc:  # any failure is reported in plain words
         return [Check(FAIL, "paper account", describe_error(exc))]
+    if not isinstance(account, TradeAccount):
+        return [Check(FAIL, "paper account", "Alpaca sent an unexpected reply")]
 
     checks = []
     status = getattr(account.status, "value", account.status)
@@ -245,6 +282,8 @@ def check_connection(config, env) -> list[Check]:
 
     try:
         clock = client.get_clock()
+        if not isinstance(clock, Clock):
+            raise TypeError("Alpaca sent an unexpected reply")
         state = "OPEN" if clock.is_open else "closed"
         checks.append(
             Check(OK, "market clock", f"US stock market is {state}; next open {clock.next_open}")
@@ -257,10 +296,14 @@ def check_connection(config, env) -> list[Check]:
     return checks
 
 
-def _check_instrument(client, keys, config, instrument) -> list[Check]:
+def _check_instrument(
+    client: TradingClient, keys: AlpacaKeys, config: Config, instrument: Instrument
+) -> list[Check]:
     from alpaca.data.enums import DataFeed
+    from alpaca.data.models import BarSet
     from alpaca.data.requests import CryptoBarsRequest, StockBarsRequest
     from alpaca.data.timeframe import TimeFrame
+    from alpaca.trading.models import Asset
 
     from strata.alpaca_clients import crypto_data_client, stock_data_client
 
@@ -269,33 +312,40 @@ def _check_instrument(client, keys, config, instrument) -> list[Check]:
         asset = client.get_asset(symbol)
     except Exception as exc:
         return [Check(FAIL, symbol, f"couldn't look it up: {describe_error(exc)}")]
+    if not isinstance(asset, Asset):
+        return [Check(FAIL, symbol, "Alpaca sent an unexpected reply")]
     if not asset.tradable:
         return [Check(FAIL, symbol, "Alpaca says it isn't tradable")]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start = now - timedelta(days=10)
     end = now - timedelta(minutes=20)  # free data plans can't fetch the newest 15 minutes
-    price = None
+    price: float | None = None
     checks = []
     try:
         if instrument.asset_class == "stock":
-            request = StockBarsRequest(
+            stock_request = StockBarsRequest(
                 symbol_or_symbols=symbol,
                 timeframe=TimeFrame.Day,
                 start=start,
                 end=end,
                 feed=DataFeed(config.data.historical_stock_feed),
             )
-            bars = stock_data_client(keys).get_stock_bars(request).data.get(symbol, [])
+            reply = stock_data_client(keys).get_stock_bars(stock_request)
         else:
-            request = CryptoBarsRequest(
+            crypto_request = CryptoBarsRequest(
                 symbol_or_symbols=symbol, timeframe=TimeFrame.Day, start=start, end=end
             )
-            bars = crypto_data_client(keys).get_crypto_bars(request).data.get(symbol, [])
+            reply = crypto_data_client(keys).get_crypto_bars(crypto_request)
+        if not isinstance(reply, BarSet):
+            raise TypeError("Alpaca sent an unexpected reply")
+        bars = reply.data.get(symbol, [])
     except Exception as exc:
         hint = ""
         if instrument.asset_class == "stock" and config.data.historical_stock_feed == "sip":
-            hint = " (if this is a permissions error, try historical_stock_feed: iex in config.yaml)"
+            hint = (
+                " (if this is a permissions error, try historical_stock_feed: iex in config.yaml)"
+            )
         checks.append(Check(FAIL, f"{symbol} prices", describe_error(exc) + hint))
     else:
         if bars:
@@ -305,7 +355,8 @@ def _check_instrument(client, keys, config, instrument) -> list[Check]:
                 Check(
                     OK,
                     f"{symbol} prices",
-                    f"{len(bars)} daily bars, last close ${last.close:,.2f} on {last.timestamp:%Y-%m-%d}",
+                    f"{len(bars)} daily bars, last close ${last.close:,.2f}"
+                    f" on {last.timestamp:%Y-%m-%d}",
                 )
             )
         else:
@@ -402,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
     report(check_env_not_in_git())
 
     if args.connect:
-        if any(c.status == FAIL for c in results):
+        if config is None or env is None or any(c.status == FAIL for c in results):
             report(Check(FAIL, "connection", "skipped: fix the [FAIL] lines above first"))
         else:
             print("\nConnecting to your Alpaca PAPER account (read-only)...")

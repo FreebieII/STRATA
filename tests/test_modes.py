@@ -46,7 +46,9 @@ def env(*, live_trading="true", live_keys=True) -> dict:
     return values
 
 
-def try_unlock(*, live_flag=True, env_values=None, typed=LIVE_CONFIRMATION_PHRASE, interactive=True):
+def try_unlock(
+    *, live_flag=True, env_values=None, typed=LIVE_CONFIRMATION_PHRASE, interactive=True
+):
     keyboard = Keyboard(typed)
     shown: list[str] = []
     try:
@@ -164,7 +166,7 @@ def test_warning_shows_the_risk_limits_before_asking():
     warning = "\n".join(shown)
     assert "REAL money" in warning
     assert "$300.00" in warning  # MAX_CAPITAL
-    assert "$60.00" in warning   # largest position
+    assert "$60.00" in warning  # largest position
     assert "Past results do not predict future results" in warning
 
 
@@ -197,7 +199,7 @@ def start(config_dict, write_config, write_env, monkeypatch):
     def _start(args: list[str], env_file_text: str) -> int:
         config_path = write_config(config_dict)
         env_path = write_env(env_file_text)
-        return main(args + ["--config", str(config_path), "--env", str(env_path)])
+        return main([*args, "--config", str(config_path), "--env", str(env_path)])
 
     return _start
 

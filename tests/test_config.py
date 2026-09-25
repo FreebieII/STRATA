@@ -113,7 +113,9 @@ def test_misspelled_risk_limit_is_caught(expect_problem):
         c["risk"]["MAX_CAPITOL"] = c["risk"].pop("MAX_CAPITAL")
 
     expect_problem(
-        misspell, "risk.MAX_CAPITOL: unknown setting", "risk.MAX_CAPITAL: required setting is missing"
+        misspell,
+        "risk.MAX_CAPITOL: unknown setting",
+        "risk.MAX_CAPITAL: required setting is missing",
     )
 
 
@@ -257,9 +259,7 @@ def test_out_of_sample_period_needs_a_year(expect_problem):
 
 
 def test_in_sample_period_needs_a_year(expect_problem):
-    expect_problem(
-        _dates(date(2021, 1, 1), date(2021, 6, 1), date(2026, 6, 1)), "in-sample period"
-    )
+    expect_problem(_dates(date(2021, 1, 1), date(2021, 6, 1), date(2026, 6, 1)), "in-sample period")
 
 
 def test_backtest_end_date_cannot_be_in_the_future(expect_problem):

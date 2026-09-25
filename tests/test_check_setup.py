@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -29,20 +29,42 @@ needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git is not i
 
 
 def test_python_version_check():
-    assert check_setup.check_python((3, 11, 0)).status == OK
+    assert check_setup.check_python((3, 12, 0)).status == OK
     assert check_setup.check_python((3, 13, 2)).status == OK
-    assert check_setup.check_python((3, 10, 9)).status == FAIL
+    assert check_setup.check_python((3, 11, 9)).status == FAIL
 
 
-def test_every_requirement_is_pinned_to_an_exact_version():
-    lines = [
-        line.split("#", 1)[0].strip()
-        for line in (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+@pytest.mark.parametrize("lock_file", ["requirements.txt", "requirements-dev.txt"])
+def test_every_locked_package_is_pinned_and_hash_checked(lock_file):
+    path = PROJECT_ROOT / lock_file
+    packages = check_setup.requirement_lines(path)  # raises on any unpinned line
+    assert packages, f"{lock_file} lists no packages"
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+    package_starts = [
+        i for i, line in enumerate(lines) if line and not line.startswith(("#", "--"))
     ]
-    packages = [line for line in lines if line]
-    assert packages, "requirements.txt lists no packages"
-    assert len(check_setup.pinned_requirements()) == len(packages)
-    assert "alpaca-py" in check_setup.pinned_requirements()
+    for i in package_starts:
+        assert lines[i + 1].startswith("--hash=sha256:"), f"{lines[i]} has no hash"
+
+
+def test_runtime_lock_holds_the_direct_dependencies():
+    pins = check_setup.pinned_requirements()
+    for name in ("alpaca-py", "fastapi", "sqlalchemy", "alembic", "redis", "pydantic"):
+        assert name in pins
+
+
+def test_windows_only_packages_are_not_required_everywhere():
+    dev_lines = check_setup.requirement_lines(PROJECT_ROOT / "requirements-dev.txt")
+    conditional = {name for name, _version, marker in dev_lines if marker}
+    assert "colorama" in conditional
+    assert "colorama" not in check_setup.pinned_requirements(PROJECT_ROOT / "requirements-dev.txt")
+
+
+def test_unreadable_lock_line_is_reported(tmp_path):
+    path = tmp_path / "requirements.txt"
+    path.write_text("somepackage>=1.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="can't read"):
+        check_setup.requirement_lines(path)
 
 
 def test_installed_packages_are_found():
@@ -178,7 +200,16 @@ def _asset(symbol: str, crypto: bool, fractionable: bool = True) -> Asset:
 
 
 def _bars(symbol: str, close: float) -> BarSet:
-    bar = {"t": "2026-09-24T04:00:00Z", "o": close, "h": close, "l": close, "c": close, "v": 1, "n": 1, "vw": close}
+    bar = {
+        "t": "2026-09-24T04:00:00Z",
+        "o": close,
+        "h": close,
+        "l": close,
+        "c": close,
+        "v": 1,
+        "n": 1,
+        "vw": close,
+    }
     return BarSet(raw_data={symbol: [bar]})
 
 
@@ -194,7 +225,7 @@ class FakeTradingClient:
 
     def get_clock(self):
         self.calls.append("get_clock")
-        now = datetime(2026, 9, 25, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 25, 12, tzinfo=UTC)
         return Clock(timestamp=now, is_open=True, next_open=now, next_close=now)
 
     def get_asset(self, symbol):
@@ -218,7 +249,9 @@ def connect(monkeypatch, write_env):
         monkeypatch.setattr(
             alpaca_clients,
             "crypto_data_client",
-            lambda keys: SimpleNamespace(get_crypto_bars=lambda request: _bars("BTC/USD", 100_000.0)),
+            lambda keys: SimpleNamespace(
+                get_crypto_bars=lambda request: _bars("BTC/USD", 100_000.0)
+            ),
         )
         config = load_config(PROJECT_ROOT / "config.yaml")
         _, env = check_setup.check_env(write_env(env_text()))

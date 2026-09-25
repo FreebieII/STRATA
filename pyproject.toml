@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strata"
+dynamic = ["version"]
+description = "Safety-first, multi-agent algorithmic trading platform. Paper trading by default."
+readme = "README.md"
+requires-python = ">=3.12"
+# Direct dependencies, pinned exactly. The full, hash-checked lock files are
+# requirements.txt and requirements-dev.txt (see docs/DEVELOPMENT.md).
+dependencies = [
+    "alembic==1.20.0",
+    "alpaca-py==0.44.0",
+    "fastapi==0.141.1",
+    "numpy==2.4.6",
+    "pandas==3.0.6",
+    "psycopg[binary]==3.3.6",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "python-dotenv==1.2.3",
+    "PyYAML==6.0.3",
+    "redis==8.1.0",
+    "SQLAlchemy==2.1.0",
+    "tzdata==2026.4",
+    "uvicorn==0.54.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx==0.28.1",
+    "mypy==2.3.1",
+    "pytest==9.1.1",
+    "ruff==0.16.9",
+    "types-PyYAML==6.0.12.20260906",
+    "types-requests==2.33.0.20260906",
+]
+
+[project.scripts]
+strata = "strata.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "strata.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["strata*"]
+
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs PostgreSQL and Redis; skipped when they aren't configured (see docs/DEVELOPMENT.md)",
+]
+filterwarnings = [
+    # Harmless notice from inside alpaca-py; STRATA doesn't use websockets.
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+]
+
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # likely bugs
+    "UP",      # modern syntax
+    "S",       # security (bandit)
+    "SIM",     # simplifications
+    "N",       # naming
+    "RUF",     # ruff's own checks
+]
+ignore = [
+    "N818",    # exception names describe what happened (e.g. LiveModeRefused)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert, fake passwords and temporary paths by design.
+"tests/**" = ["S101", "S105", "S106", "S108", "S603", "S607"]
+# check_setup.py runs `git` to confirm .env is ignored.
+"check_setup.py" = ["S603", "S607"]
+
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["strata", "main.py", "check_setup.py"]
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# These libraries ship without type information.
+module = ["alpaca.*", "dotenv.*"]
+ignore_missing_imports = true

@@ -85,9 +85,7 @@ def read_env_file(path: str | Path = DEFAULT_ENV_PATH) -> dict[str, str]:
     # Report line numbers and names only. Never echo a line: it may hold a key.
     problems = []
     if bad_lines:
-        problems.append(
-            "line(s) " + ", ".join(map(str, bad_lines)) + " are not in NAME=value form"
-        )
+        problems.append("line(s) " + ", ".join(map(str, bad_lines)) + " are not in NAME=value form")
     repeated = sorted(name for name, n in counts.items() if n > 1)
     if repeated:
         problems.append("these names appear more than once: " + ", ".join(repeated))

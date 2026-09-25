@@ -53,9 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config", default=str(DEFAULT_CONFIG_PATH), help="settings file (default: config.yaml)"
     )
-    parser.add_argument(
-        "--env", default=str(DEFAULT_ENV_PATH), help="secrets file (default: .env)"
-    )
+    parser.add_argument("--env", default=str(DEFAULT_ENV_PATH), help="secrets file (default: .env)")
     return parser
 
 

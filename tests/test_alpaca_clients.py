@@ -74,5 +74,5 @@ def test_refuses_when_alpaca_py_internals_change():
     class NoSession:
         pass
 
-    with pytest.raises(RuntimeError, match="requirements.txt"):
+    with pytest.raises(RuntimeError, match=r"requirements\.txt"):
         alpaca_clients._with_timeout(NoSession(), REQUEST_TIMEOUT)

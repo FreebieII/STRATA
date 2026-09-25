@@ -43,7 +43,9 @@ def test_git_really_ignores_env():
 def test_no_api_keys_written_into_the_code():
     suspects = []
     files = list(PROJECT_ROOT.glob("*.py")) + list(PROJECT_ROOT.glob("*.yaml"))
-    files += list((PROJECT_ROOT / "strata").rglob("*.py")) + list((PROJECT_ROOT / "tests").rglob("*.py"))
+    files += list((PROJECT_ROOT / "strata").rglob("*.py")) + list(
+        (PROJECT_ROOT / "tests").rglob("*.py")
+    )
     files.append(PROJECT_ROOT / ".env.example")
     for path in files:
         for match in KEY_PATTERN.finditer(path.read_text(encoding="utf-8")):
