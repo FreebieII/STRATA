@@ -1,0 +1,136 @@
+# STRATA development and single-machine deployment.
+#
+#   docker compose up --build -d      start PostgreSQL, Redis, migrations and the API
+#   docker compose ps                 see what is running and healthy
+#   docker compose logs -f api        follow the API's log
+#   docker compose down               stop everything (data is kept)
+#   docker compose --profile test run --rm tests    run the full test suite
+#
+# Needs a .env file next to this one (copy .env.example) with at least
+# POSTGRES_PASSWORD set. Every published port listens on 127.0.0.1 only, so
+# nothing here is reachable from other machines.
+#
+# Services for agents (worker), scheduling (scheduler) and the dashboard
+# (frontend) are added in the phases that give them real work.
+
+name: strata
+
+x-strata: &strata
+  image: strata:dev
+  build:
+    context: .
+    target: runtime
+    args:
+      UID: ${STRATA_UID:-1000}
+      GID: ${STRATA_GID:-1000}
+      GIT_COMMIT: ${GIT_COMMIT:-unknown}
+  secrets:
+    - strata_env
+  volumes:
+    - ./config.yaml:/app/config.yaml:ro
+    - strata_logs:/app/logs
+    - strata_data:/app/data
+    - strata_state:/app/state
+    - strata_reports:/app/reports
+
+x-strata-environment: &strata-environment
+  STRATA_SECRETS_FILE: /run/secrets/strata_env
+  STRATA_DB_HOST: postgres
+  STRATA_REDIS_URL: redis://redis:6379/0
+  STRATA_LOG_FORMAT: json
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: strata
+      POSTGRES_DB: strata
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strata -d strata"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Nothing is saved to disk: Redis only holds data that can be rebuilt.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *strata
+    command: ["strata", "db", "upgrade"]
+    environment:
+      <<: *strata-environment
+      STRATA_COMPONENT: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *strata
+    command: ["strata", "api", "--host", "0.0.0.0"]
+    environment:
+      <<: *strata-environment
+      STRATA_COMPONENT: api
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  tests:
+    profiles: ["test"]
+    image: strata:test
+    build:
+      context: .
+      target: test
+      args:
+        UID: ${STRATA_UID:-1000}
+        GID: ${STRATA_GID:-1000}
+    environment:
+      # Throwaway databases are created (and dropped) through this login.
+      STRATA_TEST_DATABASE_URL: postgresql+psycopg://strata:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      STRATA_TEST_REDIS_URL: redis://redis:6379/15
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+secrets:
+  strata_env:
+    file: ${STRATA_SECRETS_PATH:-./.env}
+
+volumes:
+  pgdata:
+  strata_logs:
+  strata_data:
+  strata_state:
+  strata_reports:

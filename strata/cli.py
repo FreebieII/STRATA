@@ -183,8 +183,13 @@ def _db(action: str, settings: Settings, env: dict[str, str]) -> int:
             print(f"database at migration {before or 'none'}; newest in the code: {expected}")
             return EXIT_OK if before == expected else EXIT_UNHEALTHY
 
+        if before == expected:
+            print(f"Database is already up to date (migration {before}).")
+            return EXIT_OK
+
         upgrade(url)
         after = current_revision(engine)
+        # Only real changes go in the audit log.
         with session_factory(engine).begin() as session:
             record_audit(
                 session,

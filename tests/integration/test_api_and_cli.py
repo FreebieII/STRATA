@@ -93,12 +93,16 @@ def test_cli_upgrades_an_empty_database_and_reports_healthy(
     assert main(["db", "current"]) == 1  # empty: needs migrating
     assert main(["db", "upgrade"]) == 0
     assert main(["db", "current"]) == 0
+    assert main(["db", "upgrade"]) == 0  # nothing to do the second time
     assert main(["status"]) == 0
-    assert "All checks passed." in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "already up to date" in out
+    assert "All checks passed." in out
 
     engine = make_engine(url)
     try:
         with session_factory(engine)() as session:
+            # Only the real change is audited, not the second, empty run.
             audit = session.scalars(select(AuditLog).where(AuditLog.action == "db_upgrade")).one()
     finally:
         engine.dispose()

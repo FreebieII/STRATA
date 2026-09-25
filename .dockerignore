@@ -1,0 +1,16 @@
+# Never send secrets, history or local clutter into an image.
+.env
+.env.*
+!.env.example
+.git
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+logs
+data
+state
+reports
