@@ -35,7 +35,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --require-hashes -r requirements.txt
 
-COPY pyproject.toml README.md alembic.ini config.yaml ./
+COPY pyproject.toml README.md alembic.ini config.yaml check_setup.py main.py ./
 COPY strata ./strata
 COPY migrations ./migrations
 RUN pip install --no-deps -e . \

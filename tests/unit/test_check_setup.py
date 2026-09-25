@@ -297,3 +297,18 @@ def test_describe_error_explains_rejected_keys():
     http_error = SimpleNamespace(response=SimpleNamespace(status_code=401))
     error = APIError('{"code": 40110000, "message": "request is not authorized"}', http_error)
     assert "PAPER keys" in check_setup.describe_error(error)
+
+
+def test_uses_the_secrets_file_named_by_strata_secrets_file(monkeypatch, write_env, capsys):
+    # Containers set STRATA_SECRETS_FILE=/run/secrets/strata_env.
+    monkeypatch.setenv("STRATA_SECRETS_FILE", str(write_env(env_text())))
+    assert check_setup.main([]) == 0
+    assert "[ OK ] paper keys" in capsys.readouterr().out
+
+
+def test_describe_error_blames_the_network_for_a_non_alpaca_refusal():
+    http_error = SimpleNamespace(response=SimpleNamespace(status_code=403))
+    error = APIError("Host not in allowlist: paper-api.alpaca.markets", http_error)
+    text = check_setup.describe_error(error)
+    assert "proxy or firewall" in text
+    assert "PAPER keys" not in text

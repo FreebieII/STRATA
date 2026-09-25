@@ -265,3 +265,18 @@ def test_main_refuses_a_bad_config(start, config_dict, tmp_path):
 def test_main_refuses_to_start_without_paper_keys(start, tmp_path):
     assert start([], env_text(paper=False)) == 2
     assert "ALPACA_PAPER_API_KEY" in _decisions(tmp_path)
+
+
+def test_main_finds_files_through_strata_settings(
+    monkeypatch, config_dict, write_config, write_env, tmp_path
+):
+    monkeypatch.setenv("STRATA_CONFIG_FILE", str(write_config(config_dict)))
+    monkeypatch.setenv("STRATA_SECRETS_FILE", str(write_env(env_text())))
+    assert main([]) == 0
+    assert "mode=paper" in _decisions(tmp_path)
+
+
+def test_main_refuses_a_misspelled_strata_variable(monkeypatch, capsys):
+    monkeypatch.setenv("STRATA_SECRETS_FLE", "x")
+    assert main([]) == 2
+    assert "STRATA_SECRETS_FLE" in capsys.readouterr().err

@@ -5,9 +5,10 @@
     python main.py --mode backtest       test the strategies on past prices
     python main.py --mode live --live    REAL money: finish the README checklist first
 
-STAGE 1 OF 4: this file already picks the mode and guards live mode, but
-the backtester (stage 2) and the trading loop (stage 4) aren't built yet,
-so every mode stops after its start-up checks. No orders are ever sent.
+This file already picks the mode and guards live mode, but the backtester
+(Phase 4) and the paper-trading loop (Phase 8) aren't built yet, so every
+mode stops after its start-up checks. No orders are ever sent. See
+BUILD_PLAN.md for the phases; the `strata` command covers the platform itself.
 """
 
 from __future__ import annotations
@@ -17,9 +18,8 @@ import logging
 import sys
 from pathlib import Path
 
-from strata.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
+from strata.config import ConfigError, load_config
 from strata.credentials import (
-    DEFAULT_ENV_PATH,
     CredentialsError,
     load_paper_keys,
     read_env_file,
@@ -27,6 +27,7 @@ from strata.credentials import (
 )
 from strata.logging_setup import log_decision, register_secrets, setup_logging
 from strata.modes import LiveModeRefused, Mode, resolve_mode, unlock_live_mode
+from strata.settings import SettingsError, load_settings
 
 EXIT_OK = 0
 EXIT_REFUSED = 2
@@ -51,14 +52,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="needed for --mode live, along with LIVE_TRADING=true in .env and a typed phrase",
     )
     parser.add_argument(
-        "--config", default=str(DEFAULT_CONFIG_PATH), help="settings file (default: config.yaml)"
+        "--config", default=None, help="settings file (default: STRATA_CONFIG_FILE or config.yaml)"
     )
-    parser.add_argument("--env", default=str(DEFAULT_ENV_PATH), help="secrets file (default: .env)")
+    parser.add_argument(
+        "--env", default=None, help="secrets file (default: STRATA_SECRETS_FILE or .env)"
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    try:
+        settings = load_settings()
+    except SettingsError as exc:
+        print(f"Not started: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
+    args.config = args.config or str(settings.config_file)
+    args.env = args.env or str(settings.secrets_file)
 
     try:
         mode = resolve_mode(args.mode, args.live)
@@ -89,9 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     log.info("Loaded %s keys (not shown)", keys.account)
 
     if mode is Mode.BACKTEST:
-        reason = "the backtester is built in stage 2; nothing to run yet"
+        reason = "the backtester is built in Phase 4; nothing to run yet"
     else:
-        reason = "the trading loop is built in stage 4; no orders were sent"
+        reason = "the paper-trading loop is built in Phase 8; no orders were sent"
     log_decision("STOP", reason, mode=mode.value)
     return EXIT_OK
 

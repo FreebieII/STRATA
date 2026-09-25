@@ -6,7 +6,8 @@
     strata api           run the HTTP API
 
 (`python -m strata ...` does the same.) Trading commands arrive in later
-phases; until then `python main.py` runs the Stage 1 start-up checks.
+phases (see BUILD_PLAN.md); until then `python main.py` runs the original
+start-up checks for backtest, paper and live mode.
 
 Exit codes: 0 fine, 1 a health check failed, 2 refused to start (bad
 settings, missing secrets).

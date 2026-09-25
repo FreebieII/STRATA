@@ -12,6 +12,8 @@ The exit code is 0 when nothing failed and 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import subprocess
 import sys
@@ -405,9 +407,17 @@ def describe_error(exc: Exception) -> str:
             403: "the keys were rejected or lack permission: check your PAPER keys",
             429: "too many requests: wait a minute and try again",
         }
-        text = f"Alpaca answered HTTP {code}: {exc}"
-        if code in hints:
-            text += f" ({hints[code]})"
+        if _from_alpaca(exc):
+            text = f"Alpaca answered HTTP {code}: {exc}"
+            if code in hints:
+                text += f" ({hints[code]})"
+        else:
+            # Alpaca's own errors are JSON. Anything else came from something in
+            # between (a proxy or firewall), so the keys are probably not the problem.
+            text = (
+                f"HTTP {code} from something between this machine and Alpaca "
+                f"(a proxy or firewall?), not from Alpaca itself: {exc}"
+            )
     elif isinstance(exc, requests.exceptions.Timeout):
         text = "timed out: Alpaca didn't answer in time. Check your internet connection."
     elif isinstance(exc, requests.exceptions.ConnectionError):
@@ -415,6 +425,15 @@ def describe_error(exc: Exception) -> str:
     else:
         text = f"{type(exc).__name__}: {exc}"
     return redact(text)
+
+
+def _from_alpaca(exc: Exception) -> bool:
+    """Alpaca's error replies are JSON objects with a "message" field."""
+    try:
+        body = json.loads(str(exc))
+    except ValueError:
+        return False
+    return isinstance(body, dict) and "message" in body
 
 
 # ---------------------------------------------------------------------------
@@ -427,8 +446,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also log in to your Alpaca PAPER account and fetch recent prices (read-only)",
     )
-    parser.add_argument("--config", default=str(ROOT / "config.yaml"), help=argparse.SUPPRESS)
-    parser.add_argument("--env", default=str(ROOT / ".env"), help=argparse.SUPPRESS)
+    # Same defaults as the rest of STRATA: STRATA_CONFIG_FILE and
+    # STRATA_SECRETS_FILE when set (containers set them), else the project folder.
+    config_default = os.environ.get("STRATA_CONFIG_FILE") or str(ROOT / "config.yaml")
+    env_default = os.environ.get("STRATA_SECRETS_FILE") or str(ROOT / ".env")
+    parser.add_argument("--config", default=config_default, help=argparse.SUPPRESS)
+    parser.add_argument("--env", default=env_default, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     print("STRATA setup check (this never places orders)\n")
