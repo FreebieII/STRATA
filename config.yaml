@@ -1,0 +1,134 @@
+# =====================================================================
+# STRATA configuration
+#
+# Every setting the bot uses lives here. The file is checked each time
+# the bot starts. A missing, misspelled, repeated or out-of-range setting
+# stops the bot with an error message; nothing is silently ignored or
+# replaced with a default.
+#
+# Units: money is in US dollars. Percentages are plain numbers, so 20
+# means 20% (NOT 0.20).
+#
+# API keys do NOT belong in this file. They go in .env.
+# =====================================================================
+
+# The clock that defines "today" for the daily limits (DAILY_LOSS_LIMIT
+# and MAX_TRADES_PER_DAY) and for log timestamps. New York time matches
+# the US stock market's trading day.
+timezone: America/New_York
+
+# ---------------------------------------------------------------------
+# Instruments: what the bot is allowed to trade.
+#   symbol:       the ticker. Crypto pairs use a slash and must be priced
+#                 in US dollars, e.g. BTC/USD.
+#   asset_class:  "stock" (US stocks and ETFs) or "crypto".
+#   strategy:     which strategy trades this instrument in paper and live
+#                 mode: "ma_crossover" or "rsi_reversion". Pick after
+#                 reading the stage 2 backtest report. (Backtests always
+#                 run every strategy on every instrument, whatever this
+#                 says.)
+#   enabled:      false = the bot ignores this instrument completely.
+# ---------------------------------------------------------------------
+instruments:
+  - symbol: SPY
+    asset_class: stock
+    strategy: ma_crossover
+    enabled: true
+
+  - symbol: BTC/USD
+    asset_class: crypto
+    strategy: ma_crossover
+    enabled: true
+
+# ---------------------------------------------------------------------
+# Strategy settings: common textbook values, chosen BEFORE looking at
+# any results. Don't change them to make a backtest look better. That
+# is "overfitting": the settings end up memorising the past and usually
+# fail on new data.
+# ---------------------------------------------------------------------
+strategies:
+  ma_crossover:
+    fast_period: 20     # days in the short moving average
+    slow_period: 50     # days in the long moving average
+  rsi_reversion:
+    rsi_period: 14      # days used to calculate RSI
+    buy_below: 30       # buy when RSI drops below this ("oversold")
+    sell_above: 70      # sell when RSI rises above this ("overbought")
+
+# ---------------------------------------------------------------------
+# Risk limits. The risk manager checks these before EVERY order and
+# rejects any order that would break one, even if a strategy asks for it.
+# ---------------------------------------------------------------------
+risk:
+  MAX_CAPITAL: 300          # dollars: the most the bot may ever have invested
+  MAX_POSITION_PCT: 20      # percent of MAX_CAPITAL in any one position
+                            #   (20% of $300 = $60 per position)
+  STOP_LOSS_PCT: 5          # percent: sell a position once it falls this far
+                            #   below the price paid for it
+  DAILY_LOSS_LIMIT: 15      # dollars: lose this much in one day and the bot
+                            #   stops trading until the next day
+  TOTAL_LOSS_LIMIT: 60      # dollars: lose this much in total and the KILL
+                            #   SWITCH trips. The bot stops completely and
+                            #   will not trade again until you reset it by hand
+  MAX_TRADES_PER_DAY: 3     # orders the bot may send in one day
+                            #   (buys and sells both count)
+
+# ---------------------------------------------------------------------
+# Trading costs, charged on every simulated buy AND sell in the backtest
+# so results are not better than reality. These are estimates: check
+# Alpaca's current fee schedule and adjust if it has changed.
+#   fee_pct:           broker fee, as a percent of the trade's value
+#   fee_per_sell_usd:  flat dollar fee charged on each sell
+#   slippage_pct:      how much worse than the quoted price we assume each
+#                      fill will be. Must be above 0, because real fills
+#                      are never perfect.
+# ---------------------------------------------------------------------
+costs:
+  stock:
+    fee_pct: 0.0            # Alpaca charges no commission on US stocks/ETFs
+    fee_per_sell_usd: 0.02  # small SEC/FINRA fees on sales, rounded up to the cent
+    slippage_pct: 0.05
+  crypto:
+    fee_pct: 0.25           # Alpaca crypto fee for a small account (taker,
+                            #   lowest volume tier)
+    fee_per_sell_usd: 0.0
+    slippage_pct: 0.15
+
+# ---------------------------------------------------------------------
+# Backtest settings (used from stage 2).
+# The price history is split in two by date:
+#   in-sample      start_date up to the day before test_start_date
+#   out-of-sample  test_start_date up to end_date
+# The out-of-sample results are the more honest ones: they show how the
+# fixed settings did on data nobody adjusted them for. There must be at
+# least 3 years in total, and at least 1 year on each side of the split.
+# ---------------------------------------------------------------------
+backtest:
+  start_date: 2021-01-01
+  test_start_date: 2024-07-01
+  end_date: null            # null = up to the most recent complete day
+
+# ---------------------------------------------------------------------
+# Market data.
+#   historical_stock_feed: where stock price history comes from.
+#     "sip" = all US exchanges combined: the most accurate. Free Alpaca
+#             accounts may use it for anything older than 15 minutes.
+#     "iex" = a single exchange: less accurate daily prices. Use it only
+#             if "sip" gives you a permissions error.
+# ---------------------------------------------------------------------
+data:
+  historical_stock_feed: sip
+
+# ---------------------------------------------------------------------
+# Folders the bot writes to. They are created automatically and git
+# ignores them. Relative paths are relative to this file's folder.
+# ---------------------------------------------------------------------
+paths:
+  data_dir: data          # downloaded price history (a local cache)
+  logs_dir: logs          # log files: every decision and its reason
+  state_dir: state        # the bot's memory: positions, daily counters,
+                          #   kill switch
+  reports_dir: reports    # backtest reports
+
+logging:
+  level: INFO             # DEBUG = more detail; INFO = normal

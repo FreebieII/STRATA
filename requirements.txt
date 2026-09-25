@@ -1,0 +1,36 @@
+# Exact versions, so every install behaves the same way.
+# Install with:  pip install -r requirements.txt
+# Needs Python 3.11 or newer.
+
+# --- What STRATA uses directly ----------------------------------------
+alpaca-py==0.44.0        # official Alpaca SDK: trading, account and market data
+pandas==3.0.6            # tables of prices (backtesting and indicators)
+numpy==2.4.6             # fast maths underneath pandas
+pydantic==2.13.5         # checks every setting in config.yaml
+PyYAML==6.0.3            # reads config.yaml
+python-dotenv==1.2.3     # reads API keys from .env
+tzdata==2026.4           # time-zone data (needed on Windows for New York time)
+pytest==9.1.1            # runs the automated tests in tests/
+
+# --- Pulled in by the packages above ----------------------------------
+# Pinned too, so a future release of one of them can't change how the
+# bot behaves without you noticing.
+annotated-types==0.8.0
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.20
+iniconfig==2.3.0
+msgpack==1.2.2
+packaging==26.3
+pluggy==1.6.0
+pydantic_core==2.46.5
+Pygments==2.21.0
+python-dateutil==2.9.0.post0
+pytz==2026.4
+requests==2.34.2
+six==1.17.0
+sseclient-py==1.9.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+websockets==17.1
