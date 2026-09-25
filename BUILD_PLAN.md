@@ -151,9 +151,15 @@ Stage 3 (risk manager) → Phase 7; Stage 4 (paper loop, `close_all.py`) → Pha
 Each phase ends with: tests passing, docs updated, logical commits pushed, and a
 summary of what was built and what's next.
 
+Documentation grows with the code: Phase 1 adds `docs/ARCHITECTURE.md`,
+`DEVELOPMENT.md`, `DEPLOYMENT.md`, `SECURITY.md` and `TRADING_MODES.md`;
+`BACKTESTING.md` comes with Phase 4, `AGENTS.md` with Phases 5–6,
+`RISK_MANAGEMENT.md` with Phase 7, `OPERATIONS.md` and `DISASTER_RECOVERY.md`
+with Phase 8, and `BROKER_INTEGRATION.md` with Phase 10.
+
 | Phase | Deliverables | Done when |
 |---|---|---|
-| **1. Foundation** | `pyproject.toml`, lock files, ruff and mypy config; infrastructure settings; structured logging; PostgreSQL models and first migration (`system_events`, append-only `audit_logs`); Redis client; health checks; FastAPI (`/health`, `/health/ready`, `/system/status`) with token auth; `strata` CLI (`status`, `db upgrade`, `api`); Dockerfile and compose (postgres, redis, migrate, api, test profile); docs. | `docker compose up` gives a healthy API with migrations applied; unit and integration tests pass; ruff and mypy clean. |
+| **1. Foundation** | `pyproject.toml`, lock files, ruff and mypy config; infrastructure settings; structured logging; PostgreSQL models and first migration (`system_events`, append-only `audit_logs`); Redis client; health checks; FastAPI (`/health`, `/health/ready`, `/system/status`) with token auth; `strata` CLI (`status`, `db upgrade`, `api`); Dockerfile and compose (postgres, redis, migrate, api, test profile); docs. | `docker compose up` gives a healthy API with migrations applied; unit and integration tests pass; ruff and mypy clean. **Done 25 Sep 2026.** |
 | **2. Market data** | Internal models (bars, quotes, trades, order book where available); `MarketDataProvider` interface; historical provider (Alpaca, cached to disk and recorded in `market_data_metadata`); deterministic mock provider; validation (gaps, duplicates, bad prices, stale data). | Data for SPY and BTC/USD loads through one interface; bad data is detected and refused. |
 | **3. Analysis** | Indicator library (moving averages, RSI, ATR, volatility, and so on), technical and quantitative analysis, regime detection. | Indicators match reference values; no look-ahead in any calculation. |
 | **4. Backtesting** | Event-driven engine (fees, spread, slippage, latency, sizing, stops, targets, partial fills, concurrent positions); metrics from the brief plus the original ones; equity, drawdown and trade-distribution outputs; train/validation/test and walk-forward; experiment records (dataset, dates, strategy version, parameters, git commit, results); versioned strategies (MA crossover 1.0.0, RSI 1.0.0). | The original SPY/BTC comparison runs end to end with out-of-sample results reported separately. |
