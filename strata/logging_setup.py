@@ -234,8 +234,21 @@ def setup_logging(
             screen.setFormatter(_TextFormatter("%(asctime)s %(levelname)s %(message)s", tz))
         _install(root, screen)
 
-    # Libraries that are chatty at INFO level.
-    for noisy in ("urllib3", "websockets", "asyncio"):
+    # Libraries that are chatty at INFO level. The HTTP clients (httpx and
+    # friends) log every full URL, query string included, which is where some
+    # APIs expect keys, so they only get to report warnings. Alembic announces
+    # itself every time the health check reads the schema version.
+    noisy_loggers = (
+        "urllib3",
+        "httpx",
+        "httpcore",
+        "httpx2",
+        "httpcore2",
+        "websockets",
+        "asyncio",
+        "alembic.runtime.migration",
+    )
+    for noisy in noisy_loggers:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

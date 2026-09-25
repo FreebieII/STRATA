@@ -198,3 +198,10 @@ def test_console_can_print_json_for_containers(tmp_path, capsys):
     shutdown_logging()
     line = capsys.readouterr().err.strip().splitlines()[-1]
     assert json.loads(line)["message"] == "for the container log"
+
+
+@pytest.mark.parametrize("name", ["httpx", "httpcore", "httpx2", "httpcore2", "urllib3"])
+def test_http_clients_cannot_log_full_urls(tmp_path, name):
+    # Their INFO messages contain whole URLs, query strings (and keys) included.
+    setup_logging(tmp_path, console=False)
+    assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING
