@@ -1,9 +1,12 @@
 """The `strata` command.
 
-    strata status        settings summary and database / Redis health
-    strata db upgrade    bring the database schema up to date
-    strata db current    show which migration the database is at
-    strata api           run the HTTP API
+    strata status                    settings summary and database / Redis health
+    strata db upgrade                bring the database schema up to date
+    strata db current                show which migration the database is at
+    strata api                       run the HTTP API
+    strata operator create NAME      create a dashboard account (asks for a password)
+    strata operator list             show the dashboard accounts
+    strata operator reset-password NAME / disable NAME / enable NAME
 
 (`python -m strata ...` does the same.) Trading commands arrive in later
 phases (see BUILD_PLAN.md); until then `python main.py` runs the original
@@ -16,11 +19,23 @@ settings, missing secrets).
 from __future__ import annotations
 
 import argparse
+import getpass
 import logging
 import sys
+from datetime import UTC
 from urllib.parse import urlsplit, urlunsplit
 
 from . import __version__
+from .auth.operators import (
+    OperatorError,
+    create_operator,
+    list_operators,
+    normalise_username,
+    reset_password,
+    set_disabled,
+)
+from .auth.passwords import MIN_PASSWORD_LENGTH, WeakPasswordError
+from .auth.sessions import SessionStore
 from .config import Config, ConfigError, load_config
 from .credentials import (
     CredentialsError,
@@ -59,6 +74,28 @@ def build_parser() -> argparse.ArgumentParser:
     db_commands.add_parser("upgrade", help="bring the database schema up to date")
     db_commands.add_parser("current", help="show which migration the database is at")
 
+    operator = commands.add_parser("operator", help="dashboard accounts")
+    operator_commands = operator.add_subparsers(
+        dest="operator_command", required=True, metavar="ACTION"
+    )
+    for action, help_text in (
+        ("create", "create an account; asks for its password"),
+        ("reset-password", "set a new password; ends the account's dashboard sessions"),
+    ):
+        command = operator_commands.add_parser(action, help=help_text)
+        command.add_argument("username")
+        command.add_argument(
+            "--password-stdin",
+            action="store_true",
+            help="read the password from standard input instead of asking (for scripts)",
+        )
+    for action, help_text in (
+        ("disable", "stop an account from logging in; ends its dashboard sessions"),
+        ("enable", "let a disabled account log in again"),
+    ):
+        operator_commands.add_parser(action, help=help_text).add_argument("username")
+    operator_commands.add_parser("list", help="show all accounts")
+
     api = commands.add_parser("api", help="run the HTTP API")
     api.add_argument("--host", help="address to listen on (default: STRATA_API_HOST)")
     api.add_argument("--port", type=int, help="port to listen on (default: STRATA_API_PORT)")
@@ -89,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
             return _status(settings, config, env)
         if args.command == "db":
             return _db(args.db_command, settings, env)
+        if args.command == "operator":
+            return _operator(args, settings, env)
         return _api(settings, args.host, args.port)
     except CredentialsError as exc:
         print(f"Not started: {exc}", file=sys.stderr)
@@ -211,6 +250,91 @@ def _db(action: str, settings: Settings, env: dict[str, str]) -> int:
         return EXIT_OK
     finally:
         engine.dispose()
+
+
+# --- operator ----------------------------------------------------------------------------
+
+
+def _operator(args: argparse.Namespace, settings: Settings, env: dict[str, str]) -> int:
+    engine = engine_from_settings(settings, load_database_password(env))
+    try:
+        schema = check_schema(engine)
+        if not schema.ok:
+            print(f"Database not ready: {schema.detail}", file=sys.stderr)
+            return EXIT_UNHEALTHY
+        sessions = session_factory(engine)
+        action = args.operator_command
+
+        if action == "list":
+            with sessions() as session:
+                operators = list_operators(session)
+            if not operators:
+                print("No dashboard accounts yet. Create one with: strata operator create NAME")
+            for operator in operators:
+                state = "disabled" if operator.disabled else "active"
+                last = (
+                    f"{operator.last_login_at.astimezone(UTC):%Y-%m-%d %H:%M} UTC"
+                    if operator.last_login_at
+                    else "never"
+                )
+                print(f"{operator.username:<24} {state:<9} last login: {last}")
+            return EXIT_OK
+
+        username = normalise_username(args.username)
+        actor = f"cli:{_system_user()}"
+        password = (
+            _new_password(args.password_stdin) if action in ("create", "reset-password") else ""
+        )
+        with sessions.begin() as session:
+            if action == "create":
+                create_operator(session, username, password, actor=actor)
+            elif action == "reset-password":
+                reset_password(session, username, password, actor=actor)
+            else:
+                set_disabled(session, username, action == "disable", actor=actor)
+        log_event("operator_changed", f"operator {username}: {action}", actor=actor)
+        print(f"Done: {action} {username}.")
+        if action in ("reset-password", "disable"):
+            _end_sessions(settings, username)
+        return EXIT_OK
+    except (OperatorError, WeakPasswordError) as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_REFUSED
+    finally:
+        engine.dispose()
+
+
+def _new_password(from_stdin: bool) -> str:
+    if from_stdin:
+        password = sys.stdin.readline().rstrip("\r\n")
+        if not password:
+            raise WeakPasswordError("No password was given on standard input.")
+        return password
+    first = getpass.getpass(f"New password (at least {MIN_PASSWORD_LENGTH} characters): ")
+    second = getpass.getpass("Type it again: ")
+    if first != second:
+        raise WeakPasswordError("The two passwords didn't match. Nothing was changed.")
+    return first
+
+
+def _end_sessions(settings: Settings, username: str) -> None:
+    # The API also refuses these sessions on its own (it checks the account on
+    # every request), so this is a tidy-up rather than the only safeguard.
+    client = make_redis(settings.redis_url, settings.redis_timeout_s)
+    try:
+        ended = SessionStore(client).end_all_for(username)
+        print(f"Ended {ended} dashboard session(s).")
+    except Exception:
+        print("Couldn't reach Redis to end sessions; the API refuses them anyway.")
+    finally:
+        client.close()
+
+
+def _system_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 
 # --- api -------------------------------------------------------------------------------

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Health(BaseModel):
@@ -64,3 +64,59 @@ class SystemStatus(BaseModel):
     uptime_s: float
     trading: TradingSummary
     checks: list[CheckDetail]
+
+
+# --- the dashboard's read models --------------------------------------------------
+
+
+class SystemEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    occurred_at: datetime
+    component: str
+    event_type: str
+    severity: str
+    message: str
+    request_id: str | None
+    details: dict[str, Any]
+
+
+class EventPage(BaseModel):
+    items: list[SystemEventOut]
+    # Pass as before_id to get the next (older) page; null on the last page.
+    next_before_id: int | None
+
+
+class AuditEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    occurred_at: datetime
+    actor: str
+    action: str
+    target_type: str | None
+    target_id: str | None
+    request_id: str | None
+    details: dict[str, Any]
+
+
+class AuditPage(BaseModel):
+    items: list[AuditEntryOut]
+    next_before_id: int | None
+
+
+# --- logging in -------------------------------------------------------------------
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class Identity(BaseModel):
+    """Who is calling: an operator with a dashboard session, or a script with the token."""
+
+    via: Literal["session", "token"]
+    username: str | None
+    session_expires_at: datetime | None

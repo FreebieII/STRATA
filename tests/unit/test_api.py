@@ -3,69 +3,15 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
-from strata.api.app import Services, create_app
-from strata.config import load_config
-from strata.health import ComponentHealth
+from strata.api.app import create_app
 from strata.logging_setup import setup_logging, shutdown_logging
-from strata.settings import Settings
-from tests.helpers import FAKE_API_TOKEN, PROJECT_ROOT
+from tests.helpers import FAKE_API_TOKEN
 
-CONFIG = load_config(PROJECT_ROOT / "config.yaml")
 AUTH = {"Authorization": f"Bearer {FAKE_API_TOKEN}"}
-
-
-class StandIn:
-    """Builds Services whose health checks and event store are controlled by the test."""
-
-    def __init__(self) -> None:
-        self.events: list[tuple[str, dict]] = []
-        self.closed = False
-
-    def services(self, *, token: str | None = FAKE_API_TOKEN, redis_ok: bool = True) -> Services:
-        checks = [
-            ComponentHealth("database", True, "reachable", 1.0),
-            ComponentHealth("schema", True, "up to date (migration 0001)"),
-            ComponentHealth(
-                "redis",
-                redis_ok,
-                "reachable" if redis_ok else "ConnectionError: Error 111 connecting to redis:6379",
-            ),
-        ]
-
-        def record_event(event_type: str, message: str, **fields) -> None:
-            self.events.append((event_type, fields))
-
-        def close() -> None:
-            self.closed = True
-
-        return Services(
-            settings=Settings(component="api"),
-            config=CONFIG,
-            api_token=token,
-            live_trading_switch=False,
-            health_checks=lambda: checks,
-            record_event=record_event,
-            close=close,
-            started_at=datetime.now(UTC),
-        )
-
-
-@pytest.fixture
-def stand_in() -> StandIn:
-    return StandIn()
-
-
-@pytest.fixture
-def client(stand_in):
-    def _client(**kwargs) -> TestClient:
-        return TestClient(create_app(stand_in.services(**kwargs)))
-
-    return _client
 
 
 # --- public endpoints -------------------------------------------------------------
@@ -83,16 +29,18 @@ def test_ready_when_everything_works(client):
     assert response.json()["status"] == "ok"
 
 
-def test_not_ready_when_a_part_fails(client):
-    response = client(redis_ok=False).get("/health/ready")
+def test_not_ready_when_a_part_fails(client, stand_in):
+    stand_in.redis_ok = False
+    response = client().get("/health/ready")
     assert response.status_code == 503
     body = response.json()
     assert body["status"] == "unavailable"
     assert {"name": "redis", "ok": False} in body["checks"]
 
 
-def test_public_readiness_hides_error_details(client):
-    response = client(redis_ok=False).get("/health/ready")
+def test_public_readiness_hides_error_details(client, stand_in):
+    stand_in.redis_ok = False
+    response = client().get("/health/ready")
     assert "ConnectionError" not in response.text
     assert "redis:6379" not in response.text
 
@@ -128,10 +76,9 @@ def test_status_refuses_everyone_when_no_token_is_configured(client):
 
 def test_failed_attempts_are_recorded(client, stand_in):
     client().get("/system/status", headers={"Authorization": "Bearer guess"})
-    assert ("auth_failed", {"severity": "warning", "details": {"path": "/system/status"}}) in [
-        (event, {key: fields[key] for key in ("severity", "details")})
-        for event, fields in stand_in.events
-    ]
+    [event] = [e for e in stand_in.store.events if e.event_type == "auth_failed"]
+    assert event.severity == "warning"
+    assert event.details["path"] == "/system/status"
 
 
 def test_status_with_the_token(client):
@@ -202,7 +149,7 @@ def test_security_headers_are_set(client):
 def test_start_and_stop_are_recorded_and_connections_closed(stand_in):
     with TestClient(create_app(stand_in.services())) as test_client:
         test_client.get("/health")
-    recorded = [event for event, _ in stand_in.events]
+    recorded = [event.event_type for event in stand_in.store.events]
     assert recorded[0] == "api_started"
     assert recorded[-1] == "api_stopped"
     assert stand_in.closed

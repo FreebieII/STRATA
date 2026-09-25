@@ -3,20 +3,26 @@
 GET /health          public   the process is running (for Docker)
 GET /health/ready    public   database, schema and Redis all OK? (names
                               and yes/no only; details need the token)
-GET /system/status   token    versions, uptime, trading settings, full checks
+GET /system/status   login    versions, uptime, trading settings, full checks
+GET /system/events   login    system events, newest first, in pages
+GET /audit           login    the audit log, newest first, in pages
+
+"login" means a dashboard session or the API token (see auth.py).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from ..version import code_version
 from .auth import require_operator
 from .schemas import (
+    AuditPage,
     CheckDetail,
+    EventPage,
     Health,
     InstrumentSummary,
     Readiness,
@@ -105,3 +111,44 @@ def system_status(request: Request) -> SystemStatus:
         ),
         checks=[CheckDetail(**check.as_dict()) for check in checks],
     )
+
+
+_NAME = r"^[a-z0-9_.-]{1,64}$"
+
+
+@router.get(
+    "/system/events",
+    response_model=EventPage,
+    tags=["system"],
+    dependencies=[Depends(require_operator)],
+)
+def system_events(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    before_id: int | None = Query(None, ge=1),
+    severity: Literal["debug", "info", "warning", "error", "critical"] | None = None,
+    event_type: str | None = Query(None, pattern=_NAME),
+) -> EventPage:
+    """System events, newest first. Pass `next_before_id` back as `before_id` for older ones."""
+    rows = _services(request).store.recent_events(
+        limit=limit + 1, before_id=before_id, severity=severity, event_type=event_type
+    )
+    more = len(rows) > limit
+    return EventPage(items=rows[:limit], next_before_id=rows[limit - 1].id if more else None)
+
+
+@router.get(
+    "/audit", response_model=AuditPage, tags=["system"], dependencies=[Depends(require_operator)]
+)
+def audit_log(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    before_id: int | None = Query(None, ge=1),
+    action: str | None = Query(None, pattern=_NAME),
+) -> AuditPage:
+    """The audit log, newest first. Pass `next_before_id` back as `before_id` for older ones."""
+    rows = _services(request).store.recent_audit(
+        limit=limit + 1, before_id=before_id, action=action
+    )
+    more = len(rows) > limit
+    return AuditPage(items=rows[:limit], next_before_id=rows[limit - 1].id if more else None)

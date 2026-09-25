@@ -8,6 +8,7 @@ from sqlalchemy import URL, select
 
 from strata.api.app import build_services, create_app
 from strata.cli import main
+from strata.db.migrations import head_revision
 from strata.db.models import AuditLog, SystemEvent
 from strata.db.session import make_engine, session_factory
 from strata.settings import Settings
@@ -75,7 +76,8 @@ def test_api_start_and_failed_logins_are_stored(api, migrated_url):
     assert _events(migrated_url, "api_started")
     failed = _events(migrated_url, "auth_failed")
     assert failed
-    assert failed[-1].details == {"path": "/system/status"}
+    assert failed[-1].details["path"] == "/system/status"
+    assert "address" in failed[-1].details
 
 
 def test_cli_upgrades_an_empty_database_and_reports_healthy(
@@ -106,4 +108,4 @@ def test_cli_upgrades_an_empty_database_and_reports_healthy(
             audit = session.scalars(select(AuditLog).where(AuditLog.action == "db_upgrade")).one()
     finally:
         engine.dispose()
-    assert audit.details == {"from": None, "to": "0001"}
+    assert audit.details == {"from": None, "to": head_revision()}

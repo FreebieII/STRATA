@@ -3,7 +3,9 @@
 `build_services()` connects to PostgreSQL and Redis using the STRATA_ settings
 and the secrets file. `create_app()` wraps those services in a FastAPI app
 that gives every request an ID, logs every request (never its headers, so a
-token can't reach the logs) and records start-up and shutdown in the database.
+token or session can't reach the logs), records start-up and shutdown in the
+database, and answers "unavailable" (503) instead of crashing when PostgreSQL
+or Redis is down.
 
 Tests pass their own `Services`, so the API can be tested without a database.
 """
@@ -13,16 +15,20 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 
 from .. import __version__
+from ..auth.limits import LoginLimiter
+from ..auth.sessions import SessionStore
 from ..config import Config, load_config
 from ..credentials import (
     live_trading_switch_on,
@@ -31,20 +37,19 @@ from ..credentials import (
     read_env_file,
     secret_values,
 )
-from ..db.records import record_system_event
 from ..db.session import engine_from_settings, session_factory
 from ..health import ComponentHealth, check_database, check_redis, check_schema
 from ..logging_setup import log_context, log_event, register_secrets
 from ..redis_client import make_redis
 from ..settings import Settings
+from .auth_routes import router as auth_router
 from .routes import router
+from .store import DatabaseStore, Store
 
 log = logging.getLogger("strata.api")
 
 # Accept a caller's request ID only if it is short and plain (no log injection).
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
-
-EventRecorder = Callable[..., None]
 
 
 @dataclass
@@ -56,7 +61,9 @@ class Services:
     api_token: str | None
     live_trading_switch: bool
     health_checks: Callable[[], list[ComponentHealth]]
-    record_event: EventRecorder
+    store: Store
+    sessions: SessionStore
+    login_limiter: LoginLimiter
     close: Callable[[], None]
     started_at: datetime
 
@@ -73,30 +80,6 @@ def build_services(settings: Settings) -> Services:
     def health_checks() -> list[ComponentHealth]:
         return [check_database(engine), check_schema(engine), check_redis(redis_client)]
 
-    def record_event(
-        event_type: str,
-        message: str,
-        *,
-        severity: str = "info",
-        details: Mapping[str, Any] | None = None,
-        request_id: str | None = None,
-    ) -> None:
-        # Best effort: the event is logged either way, so a database outage
-        # must not turn into a failed request.
-        try:
-            with sessions.begin() as session:
-                record_system_event(
-                    session,
-                    component=settings.component,
-                    event_type=event_type,
-                    message=message,
-                    severity=severity,
-                    details=details,
-                    request_id=request_id,
-                )
-        except Exception:
-            log.warning("could not store system event %s in the database", event_type)
-
     def close() -> None:
         redis_client.close()
         engine.dispose()
@@ -107,7 +90,9 @@ def build_services(settings: Settings) -> Services:
         api_token=load_api_token(env),
         live_trading_switch=live_trading_switch_on(env),
         health_checks=health_checks,
-        record_event=record_event,
+        store=DatabaseStore(sessions, settings.component),
+        sessions=SessionStore(redis_client),
+        login_limiter=LoginLimiter(redis_client),
         close=close,
         started_at=datetime.now(UTC),
     )
@@ -116,14 +101,14 @@ def build_services(settings: Settings) -> Services:
 def create_app(services: Services) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        services.record_event("api_started", f"API {__version__} started")
+        services.store.record_event("api_started", f"API {__version__} started")
         log_event("api_started", f"API {__version__} started")
         if services.api_token is None:
-            log.warning("ADMIN_API_TOKEN is not set: protected endpoints will refuse every request")
+            log.warning("ADMIN_API_TOKEN is not set: only dashboard logins can use the API")
         try:
             yield
         finally:
-            services.record_event("api_stopped", "API stopped")
+            services.store.record_event("api_stopped", "API stopped")
             log_event("api_stopped", "API stopped")
             services.close()
 
@@ -135,8 +120,25 @@ def create_app(services: Services) -> FastAPI:
     )
     app.state.services = services
     app.middleware("http")(_request_context)
+    app.add_exception_handler(SQLAlchemyError, _unavailable("The database is unavailable."))
+    app.add_exception_handler(RedisError, _unavailable("The session store (Redis) is unavailable."))
     app.include_router(router)
+    app.include_router(auth_router)
     return app
+
+
+def _unavailable(detail: str) -> Callable[[Request, Exception], Awaitable[Response]]:
+    async def handler(request: Request, exc: Exception) -> Response:
+        log_event(
+            "dependency_unavailable",
+            f"{request.method} {request.url.path}: {detail}",
+            level=logging.ERROR,
+            result=503,
+            error=type(exc).__name__,
+        )
+        return JSONResponse(status_code=503, content={"detail": detail})
+
+    return handler
 
 
 async def _request_context(
