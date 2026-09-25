@@ -35,6 +35,101 @@ cannot send an order yet.**
 You need **Python 3.11 or newer** (tested on 3.11, 3.12 and 3.13), `git`, and a
 free Alpaca account.
 
+### 0. Fresh Debian machine (one-time)
+
+Run each box below separately. Several commands stop to ask for a password or a
+yes/no answer, and if you paste more than one line at once, the next line gets
+typed in as the answer.
+
+Debian 12 and 13 already come with a new enough Python. Install the other tools
+(this asks for your password once):
+
+```bash
+sudo apt update && sudo apt install -y git python3 python3-venv openssh-client
+```
+
+```bash
+python3 --version            # must say 3.11 or higher
+timedatectl                  # want "System clock synchronized: yes"
+```
+
+If `sudo` is missing, or says you aren't allowed to use it, give your user sudo
+rights once. First run `su -` and type the ROOT password you chose when installing
+Debian. Then, in that root shell:
+
+```bash
+apt install -y sudo
+usermod -aG sudo YOUR_USERNAME
+exit
+```
+
+Log out and back in (or reboot) so the change takes effect.
+
+If `timedatectl` doesn't say the clock is synchronized, run
+`sudo apt install -y systemd-timesyncd`. The bot's daily limits depend on the
+clock being right.
+
+**Deploy key.** A deploy key lets this one machine download this one
+repository, and nothing else. You need one if the repository is private. It's
+optional while the repository is public.
+
+```bash
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+```
+
+Make the key. It asks for a passphrase twice. Pressing Enter both times (no
+passphrase) is fine for a read-only key.
+
+```bash
+ssh-keygen -t ed25519 -C "strata-deploy-$(hostname)" -f ~/.ssh/strata_deploy_key
+```
+
+Show the PUBLIC half, and copy the whole line it prints (it starts with `ssh-ed25519`):
+
+```bash
+cat ~/.ssh/strata_deploy_key.pub
+```
+
+On GitHub, open the repository's **Settings → Deploy keys → Add deploy key**.
+Paste the line, give it a title such as "Debian bot machine", leave **Allow write
+access unticked**, and click **Add key**. Read-only is all the bot machine needs,
+and it means nobody could change the code on GitHub through this machine. Never
+share `~/.ssh/strata_deploy_key` (the file without `.pub`): it's the private half.
+
+Tell SSH to use that key for this repository:
+
+```bash
+cat >> ~/.ssh/config <<'EOF'
+
+Host github-strata
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/strata_deploy_key
+    IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+```
+
+Test it. The first time, SSH asks you to confirm GitHub's identity. Type `yes`
+only if the fingerprint matches the one GitHub publishes at
+<https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints>.
+
+```bash
+ssh -T github-strata
+```
+
+It should answer `Hi FreebieII/STRATA! You've successfully authenticated, but
+GitHub does not provide shell access.` That message means it worked.
+
+Download the code:
+
+```bash
+git config --global pull.ff only       # "git pull" may only fast-forward, never merge
+git clone git@github-strata:FreebieII/STRATA.git
+```
+
+Then carry on with step 1 below, skipping its `git clone` line.
+
 ### 1. Get the code and install the packages
 
 **macOS / Linux** (Terminal):
@@ -76,6 +171,8 @@ Paper trading uses fake money, so it's safe to experiment with.
 4. Open `.env` in a text editor and paste the two values after
    `ALPACA_PAPER_API_KEY=` and `ALPACA_PAPER_SECRET_KEY=`.
    Leave the live keys empty and leave `LIVE_TRADING=false`.
+   In a Linux terminal, `nano .env` works: paste with Ctrl+Shift+V, save with
+   Ctrl+O then Enter, and quit with Ctrl+X.
 
 `.env` never leaves your computer: git is told to ignore it (see `.gitignore`),
 and the bot never prints or logs its contents. On macOS / Linux you can also run
@@ -93,6 +190,18 @@ python main.py                    # starts in paper mode (stage 1: checks, then 
 `check_setup.py` prints one line per check: `[ OK ]`, `[WARN]` or `[FAIL]`. It
 never places an order. If `--connect` fails with a permissions error on SPY prices,
 change `historical_stock_feed: sip` to `iex` in `config.yaml`.
+
+### 4. Getting each new stage
+
+When a new stage is ready, download it and re-run the checks:
+
+```bash
+cd STRATA
+source .venv/bin/activate
+git pull
+pip install -r requirements.txt   # in case the package list changed
+python -m pytest
+```
 
 ---
 
@@ -256,3 +365,9 @@ prize for going live early.
   after a time limit instead of hanging.
 - **`HTTP 401` or `HTTP 403`**: Alpaca rejected the keys. Paste the **paper**
   keys again, without spaces. Paper key IDs usually start with `PK`.
+- **`ssh -T github-strata` says `Connection timed out`**: your network blocks
+  SSH's usual port. In `~/.ssh/config`, change `HostName github.com` to
+  `HostName ssh.github.com` and add a line `    Port 443`, then try again.
+- **`Permission denied (publickey)`**: the deploy key isn't on GitHub yet, or the
+  wrong line was pasted. Paste the output of `cat ~/.ssh/strata_deploy_key.pub`
+  again under the repository's **Settings → Deploy keys**.
