@@ -85,9 +85,10 @@ as secure; any other address needs HTTPS.
 Without Node: `docker compose --profile test run --build --rm frontend-tests`.
 
 **Browser tests** (Playwright) drive the whole stack through nginx over HTTPS:
-login, every page, the dark theme, logging out, a phone-sized screen, strict
-headers, no console errors and no Content-Security-Policy violations. They save
-screenshots in `frontend/e2e/screenshots/`.
+login, every page and its charts, the Learn section and glossary, the dark
+theme, logging out, a phone-sized screen, strict headers, no console errors and
+no Content-Security-Policy violations. They save screenshots in
+`frontend/e2e/screenshots/`.
 
 ```bash
 docker compose up --build -d
@@ -111,6 +112,35 @@ Rules the dashboard follows:
   `X-Strata-Dashboard` header and turns failures into readable messages.
 - **The API's shapes are mirrored** in `src/api/types.ts`; change it together
   with `strata/api/schemas.py`.
+- **Every chart has a table view** with the same numbers, a legend when it has
+  two or more series, and marks you can reach with the keyboard. Colours are
+  assigned in a fixed order (`--series-1`, `-2`, `-3`) and follow the thing
+  they stand for, never its rank.
+
+### The Learn section (`src/learn/`)
+
+It teaches, so it must be right. The tests in `src/learn/learn.test.tsx`
+enforce most of this; the rest is for review.
+
+- **Official sources only.** Every source is in `sources.ts`, on a domain in
+  `OFFICIAL_DOMAINS` (regulators, exchanges, SIPC, the index provider, the fund
+  issuer, Alpaca). Cite with `<Cite id="…" />`. A chapter's source list must
+  match what it cites, and every registered source must be cited somewhere.
+- **No claim without a source or a reason.** Rules, fees, dates and figures
+  cite the page they come from. If a fact changes (a fee, a rule), update the
+  text and `CHECKED_ON` together.
+- **Glossary words** are linked with `<Term id="…">`; the id must exist in
+  `glossary.ts`, which stays in A-to-Z order (the test says where an entry
+  belongs). Notes that quote STRATA's settings are functions of them, so they
+  follow `config.yaml`.
+- **Pictures say what they are**: made-up prices, STRATA's settings,
+  arithmetic, real times, or how STRATA is built (the `kind` of a `Figure`).
+  Made-up prices come from fixed seeds in `synthetic.ts`, so pictures never
+  change, and captions are worked out from the numbers drawn, never typed in.
+- **STRATA's numbers come from its settings.** Use `useSetup()`. After changing
+  `config.yaml`, run `python scripts/dashboard_defaults.py`; a Python test fails
+  until you do.
+- **Nothing is advice.** Explain; don't recommend buying or selling anything.
 
 ## Database migrations
 

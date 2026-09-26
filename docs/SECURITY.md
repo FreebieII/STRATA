@@ -60,6 +60,16 @@ file can't enable live mode; a test checks it.
   the server doesn't announce itself.
 - The API listens on `127.0.0.1` only and has no TLS. Other devices reach it
   only through the dashboard's nginx, over HTTPS.
+- The chart endpoints take a time zone from the caller. It must match a strict
+  pattern and be a name in the time-zone database; anything else is refused
+  (422) before it reaches PostgreSQL, where it is passed as a bound parameter,
+  never as SQL text. Periods are capped at 90 days, so no request can ask the
+  database for an unbounded count.
+- The health history lives in the API's memory (24 hours, one reading every 15
+  seconds, a fixed size) and holds check names, results, times and each
+  check's detail: one line of at most 300 characters with every known secret
+  blanked out, as in the logs. Its background thread is stopped, and waited
+  for, before the database and Redis connections close.
 
 ## Dashboard logins
 
@@ -116,6 +126,11 @@ file can't enable live mode; a test checks it.
   `Secure` cookie already keeps sessions off plain HTTP.
 - The dashboard only reads. It has no way to place, change or cancel orders,
   or to change any setting.
+- The Learn section's links to official sites open in a new tab with
+  `rel="noopener noreferrer"`, so those pages get no hold on the dashboard's tab
+  and aren't told where the reader came from. The section's code is loaded
+  from the dashboard itself when first opened, under the same
+  Content-Security-Policy; the browser tests check for violations.
 
 ### The local certificate authority
 

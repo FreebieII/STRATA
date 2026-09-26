@@ -128,7 +128,11 @@ tools that touch orders.
 | D17 | No HSTS header on the dashboard. | HSTS covers every port of a host name, so it would force HTTPS on unrelated services on `localhost` or this machine's name, and browsers ignore it for IP addresses. The `Secure` session cookie already keeps logins off plain HTTP. |
 | D18 | The dashboard container runs as the operator's user ID, with a read-only filesystem, no Linux capabilities, `no-new-privileges`, and only the certificate and its key as secrets. It never receives `.env`. | Least privilege: the part of STRATA that faces the network can't read the Alpaca keys, the database password or the API token. |
 | D19 | Login attempts are limited twice: the API pauses a name or address after 5 failures in 15 minutes, and nginx allows 10 attempts a minute per address. nginx sets `X-Real-IP` itself, replacing anything the caller sends. | Defence in depth against password guessing from the home network; the address that limits are counted by can't be forged. |
-| D20 | The overview's latency sparklines come from the dashboard's own polls and live only in the browser tab. The API stores no metrics yet. | Real readings without building a metrics store before anything needs one; scheduled heartbeats arrive with the scheduler in Phase 8. |
+| D20 | The overview's latency sparklines come from the dashboard's own polls and live only in the browser tab. There is no metrics store (D21 is the API's short, in-memory health history). | Real readings without building a metrics store before anything needs one; scheduled heartbeats arrive with the scheduler in Phase 8. |
+| D21 | The API checks its own health every 15 seconds in a background thread and keeps 24 hours of readings in memory, for the dashboard's availability and response-time charts. A check must fail (or recover) twice in a row before `health_failed` (or `health_recovered`) is written to `system_events`. Shutdown waits for the thread before closing connections. | Real history without a metrics database; a restart starts it afresh, and the chart says so. Two readings in a row keep one slow answer from filling the event log. |
+| D22 | Charts show only stored records (events, the audit log, health readings) or arithmetic on `config.yaml` (costs). Counts per day use the viewer's time zone, sent by the browser, checked against the list of known zones, and grouped by PostgreSQL. | D16 applied to charts. A "day" should mean the operator's day, and an unknown zone is refused rather than guessed. |
+| D23 | The Learn section cites official sources only: regulators (SEC, FINRA, CFTC, IRS), exchanges, SIPC, S&P Dow Jones Indices, State Street and Alpaca. A test fails on any other domain, on a source nothing cites, or on a word linked to the glossary that isn't in it. Pictures drawn from invented prices are labelled as such. STRATA's own numbers come from the running API, or from a copy of `config.yaml` as shipped that a test compares with the real file. | Teaching material about money must be right and traceable; a made-up price must never pass for market data, and the text must never disagree with the settings. |
+| D24 | Paper results will be reported with the same fee and slippage estimates as backtests. | Alpaca's paper account doesn't simulate slippage, market impact, queue position or regulatory fees, and fills orders against quotes at any size, so raw paper results look better than real trading would. |
 
 ---
 
@@ -169,6 +173,7 @@ with Phase 8, and `BROKER_INTEGRATION.md` with Phase 10.
 |---|---|---|
 | **1. Foundation** | `pyproject.toml`, lock files, ruff and mypy config; infrastructure settings; structured logging; PostgreSQL models and first migration (`system_events`, append-only `audit_logs`); Redis client; health checks; FastAPI (`/health`, `/health/ready`, `/system/status`) with token auth; `strata` CLI (`status`, `db upgrade`, `api`); Dockerfile and compose (postgres, redis, migrate, api, test profile); docs. | `docker compose up` gives a healthy API with migrations applied; unit and integration tests pass; ruff and mypy clean. **Done 25 Sep 2026.** |
 | **1b. Dashboard foundation** (brought forward from Phase 9 at the operator's request) | Operator accounts and sessions; `strata operator` commands; dashboard API (system status, events, audit log); the React dashboard with the PAPER/LIVE indicator, health, trading setup, risk limits, events and audit views; nginx with HTTPS and security headers; local certificate tooling; tests including a browser run. | The dashboard works over HTTPS from another device on the home network, shows live system data, and every protected view needs a login. **Done 26 Sep 2026.** |
+| **1c. Dashboard charts and Learn** (at the operator's request) | Chart data endpoints (`/system/events/stats`, `/audit/stats`, `/system/health/history`) and the API's in-memory health history; charts on the overview, system, events, audit and risk pages, each with a table view; the Learn section (six chapters and a glossary) citing official sources only. | Every chart shows real data; the Learn section's links, sources and quoted settings are checked by tests. **Done 26 Sep 2026.** |
 | **2. Market data** | Internal models (bars, quotes, trades, order book where available); `MarketDataProvider` interface; historical provider (Alpaca, cached to disk and recorded in `market_data_metadata`); deterministic mock provider; validation (gaps, duplicates, bad prices, stale data). | Data for SPY and BTC/USD loads through one interface; bad data is detected and refused. |
 | **3. Analysis** | Indicator library (moving averages, RSI, ATR, volatility, and so on), technical and quantitative analysis, regime detection. | Indicators match reference values; no look-ahead in any calculation. |
 | **4. Backtesting** | Event-driven engine (fees, spread, slippage, latency, sizing, stops, targets, partial fills, concurrent positions); metrics from the brief plus the original ones; equity, drawdown and trade-distribution outputs; train/validation/test and walk-forward; experiment records (dataset, dates, strategy version, parameters, git commit, results); versioned strategies (MA crossover 1.0.0, RSI 1.0.0). | The original SPY/BTC comparison runs end to end with out-of-sample results reported separately. |
@@ -200,6 +205,35 @@ deliberate decision, recorded here.
 | Q5 | How do take-profit and minimum risk/reward fit signal-based strategies? | **Signal exits plus a take-profit at 2× the stop distance** (5% stop, 10% target); proposals need a risk/reward of at least 1.5. | Phases 4, 6, 7 |
 | Q6 | Use an AI model for news, sentiment and critique? | **Not yet.** Deterministic agents only; revisit once backtests exist. | Phase 5 |
 | Q7 | Where can the dashboard be opened from? | **This machine and the home network**, over HTTPS with a proper login. | Phase 1b |
+
+**Note on Q4 (26 September 2026).** Q4 was decided under the pattern day
+trader rule. That rule has since been replaced: the SEC approved FINRA's
+intraday margin rules on 14 April 2026 (Release 34-105226), they took effect on
+4 June 2026, and brokers may switch over until 20 October 2027. Alpaca switched
+on 4 June 2026 and removed its day-trade count fields from the API on 6 July
+2026. Q4 still stands, and the code will follow it, until the operator decides
+otherwise.
+
+### Findings to act on in later phases
+
+From the research for the Learn section (official sources, checked 26 September 2026):
+
+- **Phase 2:** confirm that the free Alpaca plan gives historical stock bars
+  from the SIP feed (`data.historical_stock_feed: sip`); if not, use `iex` and
+  say so in every backtest report.
+- **Phase 4:** FINRA's trading activity fee is paused from 1 October to
+  31 December 2026, so the $0.02 per stock sale in `config.yaml` is even more
+  generous than usual for trades in that period. Keep it: an estimate that is
+  too high is the safe kind.
+- **Phase 8:** Alpaca's crypto orders are market, limit and stop-limit only
+  (good-till-cancelled or immediate-or-cancel), so there is no plain stop order
+  for BTC/USD. Its stop must be a stop-limit order or STRATA watching the price
+  and selling; choose one, with its limits, before paper trading starts.
+- **Phase 8:** paper fills are too kind (see D24). Report paper results with
+  the cost estimates, and never compare raw paper results with backtests.
+- **Phase 14:** if the live account is a cash account, sale proceeds settle one
+  business day later (T+1). Check with Alpaca how unsettled money may be used
+  before going live.
 
 ---
 

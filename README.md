@@ -24,6 +24,7 @@ STRATA is built in 14 phases; [BUILD_PLAN.md](BUILD_PLAN.md) has the details.
 |---|---|---|
 | 1 | Foundation: config, secrets, logging, PostgreSQL, Redis, API, CLI, Docker, tests | **Done** |
 | 1b | Dashboard foundation: operator logins, the HTTPS web dashboard, health, setup, limits, events, audit log | **Done** |
+| 1c | Dashboard charts from real data, and the Learn section: how trading works, and how STRATA does it | **Done** |
 | 2 | Market data: one interface for prices, validation, cached history | Next |
 | 3 | Indicators, technical and quantitative analysis, market regimes | |
 | 4 | Backtesting with fees and slippage, walk-forward tests, experiment records | |
@@ -180,6 +181,11 @@ network, follow
 The strip across the top always shows the trading mode. Today it says
 **PAPER**, and the dashboard has no way to place orders.
 
+New to trading? **Learn** in the menu explains how it works, from order types
+and fees to backtesting, and how STRATA does each part, with STRATA's own
+settings and links to the official rules. Its glossary covers every word and
+abbreviation used.
+
 ### 7. Run the tests
 
 ```bash
@@ -243,8 +249,11 @@ In Docker, prefix them with `docker compose exec api`, for example
 | `GET /health` | public | the API process is running |
 | `GET /health/ready` | public | database, schema and Redis: yes/no each |
 | `GET /system/status` | login | versions, uptime, trading settings, detailed checks |
-| `GET /system/events` | login | system events, newest first, in pages |
-| `GET /audit` | login | the audit log, newest first, in pages |
+| `GET /system/events` | login | system events, newest first, in pages (`since` limits them to a period) |
+| `GET /system/events/stats` | login | events per day by severity, and the most frequent kinds (`days`, `tz`, `event_type`) |
+| `GET /system/health/history` | login | the API's own health readings over the last `1h`, `6h` or `24h` (kept in memory) |
+| `GET /audit` | login | the audit log, newest first, in pages (`since` limits it to a period) |
+| `GET /audit/stats` | login | audit entries per day by action (`days`, `tz`, `action`) |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | — | dashboard logins |
 
 "Login" means a dashboard session, or a script sending the token as
@@ -279,7 +288,8 @@ STRATA refuses to start and tells you which. Details:
 | `.env` | *You create this.* Keys, passwords and the API token. Never share or commit it. |
 | `docker-compose.yml` | Starts PostgreSQL, Redis, the migrations, the API and the dashboard. Only the dashboard can be opened from other devices, and only if you choose. |
 | `Dockerfile` | How the STRATA container image is built. |
-| `frontend/` | The web dashboard (React and TypeScript), its tests, and `nginx/`: the HTTPS server in front of it. |
+| `frontend/` | The web dashboard (React and TypeScript), its charts, the Learn section (`src/learn/`), its tests, and `nginx/`: the HTTPS server in front of it. |
+| `scripts/dashboard_defaults.py` | Copies the trading settings in `config.yaml` into the dashboard's Learn pages, which show them before the API answers. Run it after changing `config.yaml`; a test reminds you. |
 | `scripts/make-dashboard-cert.sh` | Makes the dashboard's HTTPS certificate, from a certificate authority of your own that can only vouch for home-network names. |
 | `certs/` | *Made by the script.* The certificate, its key and the CA. Git ignores it. |
 | `pyproject.toml` | The project's packages and the settings for the test, lint and type-check tools. |
@@ -394,11 +404,13 @@ shows the tested behaviour is there.
 - [ ] Fractional shares and crypto trading are enabled on my live account. One
       SPY share costs far more than the $60 position limit, so fractional shares
       are needed.
-- [ ] I understand the pattern day trader rule. In a US margin account under
-      $25,000, making 4 or more day trades (buying and selling the same stock on
-      the same day) within 5 business days gets the account restricted. The rule
-      has been under review, so check Alpaca's help pages for the current version.
-      STRATA avoids same-day round trips in stocks.
+- [ ] I understand today's day-trading rules. The old pattern day trader rule
+      (4 or more day trades in 5 business days needed $25,000 in a margin
+      account) was replaced by FINRA's intraday margin rules: approved by the SEC
+      on 14 April 2026, in force from 4 June 2026, with brokers switching over
+      until 20 October 2027. Alpaca switched on 4 June 2026. I have read Alpaca's
+      help pages on how the new rules apply to my account. STRATA still avoids
+      same-day round trips in stocks (decision Q4 in `BUILD_PLAN.md`).
 - [ ] I understand the fees (crypto trades cost about 0.25% each way) and the tax
       rules for trading where I live.
 - [ ] The machine running STRATA is kept secure, and my live keys are stored only

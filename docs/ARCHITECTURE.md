@@ -22,7 +22,7 @@ Agents propose, deterministic code decides. The execution engine will only
 accept orders carrying an approval recorded by the risk engine, and will re-check
 the limits immediately before sending.
 
-## What exists after Phase 1b
+## What exists after Phase 1c
 
 | Piece | Module | Does |
 |---|---|---|
@@ -35,9 +35,12 @@ the limits immediately before sending.
 | Redis | `strata/redis_client.py` | Client with time limits; short-lived data only |
 | Health | `strata/health.py` | Database, schema version and Redis checks that never raise |
 | Operator accounts | `strata/auth/` | scrypt password hashing, sessions in Redis (hashed IDs), login-failure lock-out |
-| API | `strata/api/` | FastAPI: health, readiness, status, events, audit log, login/logout; session or bearer-token auth; request IDs |
+| API | `strata/api/` | FastAPI: health, readiness, status, events, audit log, chart statistics, login/logout; session or bearer-token auth; request IDs |
+| Health history | `strata/api/health_history.py` | A background thread that checks health every 15 s and keeps 24 hours of readings in memory; writes `health_failed` / `health_recovered` events |
+| Chart statistics | `strata/api/stats.py`, `strata/api/store.py` | Events and audit entries counted per day in the viewer's time zone, by PostgreSQL |
 | CLI | `strata/cli.py` | `strata status`, `strata db upgrade/current`, `strata operator ...`, `strata api` |
-| Dashboard | `frontend/src/` | React and TypeScript, built by Vite into static files; reads the API only |
+| Dashboard | `frontend/src/` | React and TypeScript, built by Vite into static files; reads the API only. Charts in `charts/` |
+| Learn section | `frontend/src/learn/` | Chapters, glossary, official-source registry and illustrations; loaded only when opened |
 | HTTPS front door | `frontend/nginx/` | nginx: TLS, security headers, the static dashboard, `/api/` passed to the API |
 | Certificates | `scripts/make-dashboard-cert.sh` | A local CA limited to home-network names, and the dashboard's certificate |
 | Alpaca clients | `strata/alpaca_clients.py` | Connections with time limits; becomes part of the broker and data adapters |
@@ -56,7 +59,8 @@ the limits immediately before sending.
                        ▼
                     API (compose network; 127.0.0.1:8000 on the machine)
                        ├─ PostgreSQL: operators, system events, audit log
-                       └─ Redis: sessions (hashed IDs), login-failure counters
+                       ├─ Redis: sessions (hashed IDs), login-failure counters
+                       └─ memory: the last 24 hours of health readings
 ```
 
 The browser only ever talks to nginx, so the dashboard and the API share one
@@ -69,7 +73,38 @@ every page (the PAPER/LIVE banner, overview, system and risk views). The newest
 page of events and of the audit log refreshes every 30 seconds. Polling pauses
 while the browser tab is hidden. While new data loads, the old stays on screen,
 slightly dimmed. Latency sparklines are drawn from the readings this page has
-taken since it opened; the API stores no latency history.
+taken since it opened.
+
+### Where each chart's numbers come from
+
+Every chart shows real records or exact arithmetic, never sample data, and each
+has a "Show table" view with the same numbers.
+
+| Chart | Page | Source |
+|---|---|---|
+| Availability (Overview, System) and response times (System) | Overview, System | `GET /system/health/history`: the API checks the database, schema and Redis every 15 seconds and keeps 24 hours of readings **in memory**, in 1-, 5- or 20-minute slots. A restart starts the history afresh, and the chart says when recording began. A check must fail twice in a row before a `health_failed` event is written, and pass twice before `health_recovered`. |
+| Sign-ins | Overview | `GET /audit/stats?action=login` and `GET /system/events/stats?event_type=login_failed` |
+| Events per day, most frequent | Events | `GET /system/events/stats`: counts by severity and the ten most frequent kinds |
+| Activity per day, actions | Audit log | `GET /audit/stats` |
+| Round-trip costs | Risk limits | Arithmetic on `config.yaml`: fees and slippage both ways on the largest position |
+
+Days are counted in the viewer's time zone: the browser sends it (`tz`), the
+API accepts only names in the time-zone database, and PostgreSQL groups rows
+with `date_trunc('day', …, tz)`. A period is at most 90 days. The Events and
+Audit pages' period filter (`days` in the address) limits the list below the
+charts too, using `since`.
+
+### The Learn section
+
+Six chapters and a glossary, under `/learn`. The code is loaded only when the
+section is opened, so the monitoring pages stay small. The chapters quote
+STRATA's settings from `GET /system/status`; until that answers they use
+`frontend/src/learn/shipped.json`, a copy of `config.yaml` as shipped that
+`scripts/dashboard_defaults.py` writes and a test compares with the real file.
+Facts about rules, fees and markets link to official sources only (the
+registry is `frontend/src/learn/sources.ts`); pictures drawn from invented
+prices are labelled as illustrations, and their captions are worked out from
+the same numbers they draw.
 
 ## Three kinds of settings
 
