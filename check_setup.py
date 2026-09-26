@@ -276,8 +276,14 @@ def check_connection(config: Config, env: dict[str, str]) -> list[Check]:
                 Check(FAIL, "crypto trading", f"status {crypto_status}; enable crypto in Alpaca")
             )
 
+    # FINRA replaced the pattern day trader rule with intraday margin rules on
+    # 4 June 2026, and Alpaca stopped sending these fields on 6 July 2026.
     if account.pattern_day_trader:
         checks.append(Check(WARN, "day trading", "this account is flagged as a pattern day trader"))
+    elif account.pattern_day_trader is None and account.daytrade_count is None:
+        checks.append(
+            Check(OK, "day trading", "no day-trade count (intraday margin rules replace it)")
+        )
     else:
         count = account.daytrade_count if account.daytrade_count is not None else "unknown"
         checks.append(Check(OK, "day trading", f"not flagged; day trades in last 5 days: {count}"))

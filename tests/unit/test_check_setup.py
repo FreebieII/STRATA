@@ -271,6 +271,19 @@ def test_connect_flags_a_blocked_account(connect):
     assert any(c.name == "paper account" and c.status == FAIL for c in checks)
 
 
+def test_connect_copes_without_day_trade_fields(connect):
+    # Alpaca's account no longer carries them (the rule behind them was replaced).
+    checks, _ = connect(_account(pattern_day_trader=None, daytrade_count=None))
+    [day] = [c for c in checks if c.name == "day trading"]
+    assert day.status == OK
+    assert "unknown" not in day.detail
+
+
+def test_connect_warns_about_a_pattern_day_trader_flag(connect):
+    checks, _ = connect(_account(pattern_day_trader=True))
+    assert any(c.name == "day trading" and c.status == WARN for c in checks)
+
+
 def test_connect_flags_crypto_not_enabled(connect):
     checks, _ = connect(_account(crypto_status=AccountStatus.INACTIVE))
     assert any(c.name == "crypto trading" and c.status == FAIL for c in checks)
