@@ -1,22 +1,37 @@
-// The audit log: who did what (logins, operator changes, database upgrades),
-// newest first. The database refuses to change or delete these rows.
+// The audit log: who did what (logins, operator changes, database upgrades):
+// a chart of each day, the actions ranked, and the entries, newest first.
+// The database refuses to change or delete these rows.
 
 import { Fragment, useCallback } from "react";
 import { useSearchParams } from "react-router";
 
 import { api } from "../api/client";
 import { useResource } from "../api/useResource";
-import { NameFilter, Pager, usePager } from "../components/Filters";
+import { ChartFrame } from "../charts/ChartFrame";
+import { ColumnChart, ColumnTable } from "../charts/ColumnChart";
+import { RankBars, RankTable } from "../charts/RankBars";
+import {
+  AUDIT_LEGEND,
+  AUDIT_SERIES,
+  auditColumns,
+  browserTimeZone,
+  parsePeriod,
+  PERIODS,
+  periodStart,
+} from "../charts/series";
+import { NameFilter, Pager, Segmented, usePager } from "../components/Filters";
 import { IconLock } from "../components/Icons";
 import { Card, DisclosureButton, ErrorNotice, JsonBlock, KeyValues, PageHeader, RefreshControl, Time, useToggleSet } from "../components/Parts";
 import { formatUtc } from "../lib/format";
-import { PAGE_SIZE, parseId, parseName } from "./EventsPage";
+import { CHART_INTERVAL_MS, PAGE_SIZE, parseId, parseName } from "./EventsPage";
 import { LIST_INTERVAL_MS } from "./OverviewPage";
 
 export function AuditPage() {
   const [params, setParams] = useSearchParams();
   const action = parseName(params.get("action"));
   const beforeId = parseId(params.get("before"));
+  const days = parsePeriod(params.get("days"), 30);
+  const tz = browserTimeZone();
 
   const update = useCallback(
     (changes: Record<string, string | null>) =>
@@ -32,18 +47,24 @@ export function AuditPage() {
   );
   const pager = usePager(beforeId, (id) => update({ before: id === null ? null : String(id) }));
   const { reset } = pager;
-  const setAction = useCallback(
-    (value: string | null) => {
+  const setFilter = useCallback(
+    (changes: Record<string, string | null>) => {
       reset();
-      update({ action: value, before: null });
+      update({ ...changes, before: null });
     },
     [reset, update],
   );
+  const setAction = useCallback((value: string | null) => setFilter({ action: value }), [setFilter]);
 
   const page = useResource(
-    `audit:${action}:${beforeId}`,
-    (signal) => api.audit({ limit: PAGE_SIZE, action, beforeId }, signal),
+    `audit:${action}:${beforeId}:${days}`,
+    (signal) => api.audit({ limit: PAGE_SIZE, action, beforeId, since: periodStart(days) }, signal),
     beforeId === null ? LIST_INTERVAL_MS : undefined,
+  );
+  const chart = useResource(
+    `audit-stats:${days}:${action}:${tz}`,
+    (signal) => api.auditStats({ days, tz, action }, signal),
+    CHART_INTERVAL_MS,
   );
   const [open, toggle] = useToggleSet();
   const items = page.data?.items ?? [];
@@ -69,6 +90,12 @@ export function AuditPage() {
       </PageHeader>
 
       <div className="filters" role="search" aria-label="Filter the audit log">
+        <Segmented
+          label="Period"
+          value={String(days)}
+          onChange={(value) => setFilter({ days: value === "30" ? null : value })}
+          options={PERIODS.map((p) => ({ value: String(p), label: `${p} days` }))}
+        />
         <NameFilter
           label="Action"
           value={action}
@@ -76,18 +103,64 @@ export function AuditPage() {
           suggestions={seenActions}
           placeholder="for example login"
         />
-        {action ? (
-          <button type="button" className="button button--ghost button--small" onClick={() => setAction(null)}>
-            Clear filter
+        {action || days !== 30 ? (
+          <button
+            type="button"
+            className="button button--ghost button--small"
+            onClick={() => setFilter({ action: null, days: null })}
+          >
+            Clear filters
           </button>
         ) : null}
       </div>
+
+      {chart.error ? <ErrorNotice error={chart.error} title="Couldn't load the chart" /> : null}
+      {chart.data ? (
+        <div className="charts-row">
+          <ChartFrame
+            title="Activity per day"
+            subtitle={`Last ${days} days, counted in your time zone (${tz}).`}
+            legend={AUDIT_LEGEND}
+            busy={chart.refreshing}
+            table={<ColumnTable series={AUDIT_SERIES} columns={auditColumns(chart.data)} caption="Audit entries per day" />}
+          >
+            <ColumnChart
+              series={AUDIT_SERIES}
+              columns={auditColumns(chart.data)}
+              label="Audit entries per day, by kind"
+              noun="entries"
+            />
+          </ChartFrame>
+          <ChartFrame
+            title="Actions"
+            subtitle={`${chart.data.total} entries in ${days} days. Pick one to see only that action.`}
+            busy={chart.refreshing}
+            table={
+              <RankTable
+                items={chart.data.actions.map((a) => ({ name: a.name, value: a.count }))}
+                caption="Audit actions"
+                nameLabel="Action"
+              />
+            }
+          >
+            <RankBars
+              items={chart.data.actions.map((a) => ({ name: a.name, value: a.count }))}
+              label="Audit actions, most frequent first"
+              onPick={setAction}
+            />
+          </ChartFrame>
+        </div>
+      ) : chart.loading ? (
+        <p className="loading">Loading the chart…</p>
+      ) : null}
 
       {page.error ? <ErrorNotice error={page.error} title="Couldn't load the audit log" /> : null}
 
       <Card busy={page.refreshing && Boolean(page.data)}>
         {page.data && !items.length ? (
-          <p className="empty-line">{action ? "No entries match this filter." : "The audit log is empty."}</p>
+          <p className="empty-line">
+            {action ? "No entries match this filter." : `No entries in the last ${days} days.`}
+          </p>
         ) : null}
         {items.length ? (
           <div className="table-scroll">

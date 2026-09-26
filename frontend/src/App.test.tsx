@@ -10,7 +10,9 @@ import { App } from "./App";
 import { DASHBOARD_HEADER } from "./api/client";
 import {
   auditEntry,
+  auditStats,
   event,
+  eventStats,
   fakeApi,
   healthyRoutes,
   identity,
@@ -341,6 +343,84 @@ describe("pages that come later", () => {
     fakeApi(healthyRoutes());
     open("/nowhere");
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+  });
+});
+
+describe("charts on the pages", () => {
+  it("the events page charts each day, and one filter row scopes chart and list", async () => {
+    const user = userEvent.setup();
+    const server = fakeApi({
+      ...healthyRoutes(),
+      "GET /system/events/stats": (request) =>
+        json(200, {
+          ...eventStats(Number(request.query.get("days") ?? 14), [{ warning: 2, info: 1 }]),
+          types: [
+            { name: "login_failed", count: 2 },
+            { name: "api_started", count: 1 },
+          ],
+        }),
+    });
+    open("/events");
+    expect(await screen.findByRole("heading", { name: "Events per day" })).toBeInTheDocument();
+    expect(server.last("GET", "/system/events/stats")?.query.get("days")).toBe("14");
+    expect(server.last("GET", "/system/events/stats")?.query.get("tz")).toBeTruthy();
+    expect(server.last("GET", "/system/events")?.query.get("since")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "30 days" }));
+    await waitFor(() => expect(server.last("GET", "/system/events/stats")?.query.get("days")).toBe("30"));
+    expect(where()).toBe("/events?days=30");
+
+    await user.click(screen.getByRole("button", { name: "Show only login_failed" }));
+    await waitFor(() => expect(server.last("GET", "/system/events")?.query.get("event_type")).toBe("login_failed"));
+    expect(server.last("GET", "/system/events/stats")?.query.get("event_type")).toBe("login_failed");
+
+    await user.click(screen.getAllByRole("button", { name: "Show table" })[0]!);
+    expect(screen.getByRole("table", { name: "Events per day by severity" })).toBeInTheDocument();
+  });
+
+  it("the audit page charts activity per day", async () => {
+    const user = userEvent.setup();
+    const server = fakeApi({
+      ...healthyRoutes(),
+      "GET /audit/stats": () => json(200, auditStats(30, [{ login: 2, operator_created: 1 }])),
+    });
+    open("/audit");
+    expect(await screen.findByRole("heading", { name: "Activity per day" })).toBeInTheDocument();
+    expect(screen.getByText("Account and database changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show only operator_created" }));
+    await waitFor(() => expect(server.last("GET", "/audit")?.query.get("action")).toBe("operator_created"));
+  });
+
+  it("the system page shows the health history and switches its window", async () => {
+    const user = userEvent.setup();
+    const server = fakeApi(healthyRoutes());
+    open("/system");
+    expect(await screen.findByRole("heading", { name: "Health history" })).toBeInTheDocument();
+    expect(screen.getByText("80.0%")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "6 hours" }));
+    await waitFor(() => expect(server.last("GET", "/system/health/history")?.query.get("window")).toBe("6h"));
+  });
+
+  it("the overview shows availability and sign-ins", async () => {
+    const server = fakeApi({
+      ...healthyRoutes(),
+      "GET /system/events/stats": () => json(200, eventStats(14, [{ warning: 3 }])),
+      "GET /audit/stats": () => json(200, auditStats(14, [{ login: 5 }])),
+    });
+    open("/");
+    expect(await screen.findByRole("heading", { name: "Availability, last 24 hours" })).toBeInTheDocument();
+    expect(await screen.findByText("5 successful, 3 failed. Many failures in a day can mean someone is guessing passwords.")).toBeInTheDocument();
+    expect(server.last("GET", "/system/events/stats")?.query.get("event_type")).toBe("login_failed");
+    expect(server.last("GET", "/audit/stats")?.query.get("action")).toBe("login");
+    expect(server.last("GET", "/system/health/history")?.query.get("window")).toBe("24h");
+  });
+
+  it("the risk page shows what a round trip costs", async () => {
+    fakeApi(healthyRoutes());
+    open("/risk");
+    expect(await screen.findByRole("heading", { name: "What one round trip costs" })).toBeInTheDocument();
+    expect(screen.getByText("$0.48")).toBeInTheDocument();
+    expect(screen.getByText("$0.08")).toBeInTheDocument();
   });
 });
 

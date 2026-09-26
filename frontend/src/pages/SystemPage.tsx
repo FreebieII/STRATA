@@ -3,6 +3,7 @@
 
 import { useSystemStatus } from "../api/SystemStatusContext";
 import { useAuth } from "../auth/AuthContext";
+import { HealthHistoryCard } from "../charts/HealthHistoryCard";
 import { IconGood, IconLock, IconWarning } from "../components/Icons";
 import { Card, ErrorNotice, KeyValues, PageHeader, RefreshControl, Time } from "../components/Parts";
 import { HealthBadge, StatusBadge } from "../components/StatusBadge";
@@ -97,6 +98,10 @@ export function SystemPage() {
               Anything that trades treats a failing check as “do not trade”.
             </p>
           </Card>
+
+          <section className="span-2" aria-label="Health history">
+            <HealthHistoryCard />
+          </section>
 
           <Card title="How live trading is locked" className="span-2">
             <p className="card__lede">

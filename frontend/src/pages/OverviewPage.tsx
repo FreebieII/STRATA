@@ -9,6 +9,8 @@ import type { CheckDetail, RiskLimitsSummary, SystemStatus, TradingSummary } fro
 import { useResource, type Resource } from "../api/useResource";
 import type { AuditPage, EventPage } from "../api/types";
 import { IconArrowRight, IconCritical, IconGood, IconLock, IconWarning } from "../components/Icons";
+import { HealthHistoryCard } from "../charts/HealthHistoryCard";
+import { SignInsCard } from "../charts/SignInsCard";
 import { Card, ErrorNotice, KeyValues, PageHeader, RefreshControl, Time } from "../components/Parts";
 import { Sparkline } from "../components/Sparkline";
 import { HealthBadge, SeverityBadge, StatusBadge } from "../components/StatusBadge";
@@ -48,6 +50,10 @@ export function OverviewPage() {
             {data.checks.map((check) => (
               <CheckTile key={check.name} check={check} samples={history[check.name] ?? []} />
             ))}
+          </div>
+          <div className="grid grid--2">
+            <HealthHistoryCard compact />
+            <SignInsCard />
           </div>
           <div className="grid grid--2">
             <TradingCard trading={data.trading} busy={stale} />

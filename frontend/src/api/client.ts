@@ -2,7 +2,17 @@
 // same site (nginx, or Vite while developing, forwards it to the STRATA API),
 // with the session cookie and the header the API asks dashboards to send.
 
-import type { AuditPage, EventPage, Identity, Severity, SystemStatus } from "./types";
+import type {
+  AuditPage,
+  AuditStats,
+  EventPage,
+  EventStats,
+  HealthHistory,
+  HealthWindow,
+  Identity,
+  Severity,
+  SystemStatus,
+} from "./types";
 
 export const API_BASE = "/api";
 
@@ -123,11 +133,22 @@ export type EventQuery = {
   beforeId?: number | null;
   severity?: Severity | null;
   eventType?: string | null;
+  // ISO 8601 time: only events at or after it.
+  since?: string | null;
 };
 
 export type AuditQuery = {
   limit?: number;
   beforeId?: number | null;
+  action?: string | null;
+  since?: string | null;
+};
+
+export type StatsQuery = {
+  days: number;
+  // An IANA time zone name: days are counted there.
+  tz: string;
+  eventType?: string | null;
   action?: string | null;
 };
 
@@ -164,13 +185,29 @@ export const api = {
           before_id: q.beforeId,
           severity: q.severity,
           event_type: q.eventType,
+          since: q.since,
         }),
       signal ? { signal } : {},
     ),
 
   audit: (q: AuditQuery, signal?: AbortSignal) =>
     apiRequest<AuditPage>(
-      "/audit" + query({ limit: q.limit, before_id: q.beforeId, action: q.action }),
+      "/audit" + query({ limit: q.limit, before_id: q.beforeId, action: q.action, since: q.since }),
       signal ? { signal } : {},
     ),
+
+  eventStats: (q: StatsQuery, signal?: AbortSignal) =>
+    apiRequest<EventStats>(
+      "/system/events/stats" + query({ days: q.days, tz: q.tz, event_type: q.eventType }),
+      signal ? { signal } : {},
+    ),
+
+  auditStats: (q: StatsQuery, signal?: AbortSignal) =>
+    apiRequest<AuditStats>(
+      "/audit/stats" + query({ days: q.days, tz: q.tz, action: q.action }),
+      signal ? { signal } : {},
+    ),
+
+  healthHistory: (window: HealthWindow, signal?: AbortSignal) =>
+    apiRequest<HealthHistory>("/system/health/history" + query({ window }), signal ? { signal } : {}),
 };

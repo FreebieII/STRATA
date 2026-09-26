@@ -3,7 +3,10 @@
 // from the API; the arithmetic only restates it.
 
 import { useSystemStatus } from "../api/SystemStatusContext";
-import type { RiskLimitsSummary } from "../api/types";
+import type { RiskLimitsSummary, TradingSummary } from "../api/types";
+import { ChartFrame } from "../charts/ChartFrame";
+import { COST_LEGEND, CostBars, CostTable, smallPct } from "../charts/CostBars";
+import { roundTrip } from "../lib/costs";
 import { IconInfo, IconLock } from "../components/Icons";
 import { Meter, Pips } from "../components/Meter";
 import { Card, ErrorNotice, Notice, PageHeader, RefreshControl } from "../components/Parts";
@@ -51,6 +54,7 @@ export function RiskPage() {
       </Notice>
 
       {limits ? <Limits limits={limits} busy={Boolean(status.error)} /> : null}
+      {status.data ? <CostCard trading={status.data.trading} busy={Boolean(status.error)} /> : null}
 
       <Card title="Rules decided for the risk engine" className="spaced">
         <p className="card__lede">
@@ -160,6 +164,34 @@ function Limits({ limits, busy }: { limits: RiskLimitsSummary; busy: boolean }) 
           jump past a stop, so real losses can use up a limit sooner.
         </p>
       </Card>
+    </div>
+  );
+}
+
+function CostCard({ trading, busy }: { trading: TradingSummary; busy: boolean }) {
+  const value = trading.risk_limits.max_position_value;
+  const rows = [
+    { label: "Stock or ETF", cost: roundTrip(trading.costs.stock, value) },
+    { label: "Crypto", cost: roundTrip(trading.costs.crypto, value) },
+  ];
+  const crypto = rows[1]!.cost;
+  const stock = rows[0]!.cost;
+  return (
+    <div className="spaced">
+      <ChartFrame
+        title="What one round trip costs"
+        subtitle={`Buying and later selling a ${formatUsd(value)} position, before the price moves, with the cost estimates in config.yaml.`}
+        legend={COST_LEGEND}
+        busy={busy}
+        table={<CostTable rows={rows} value={value} />}
+      >
+        <CostBars rows={rows} />
+        <p className="chart-note">
+          A crypto position must rise about {smallPct(crypto.breakevenPct)} before it makes any money, a
+          stock position about {smallPct(stock.breakevenPct)}. Every backtest pays these costs on every
+          trade, so its results are never better than reality would allow.
+        </p>
+      </ChartFrame>
     </div>
   );
 }

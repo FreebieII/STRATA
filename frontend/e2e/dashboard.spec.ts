@@ -80,7 +80,15 @@ test("every protected view needs a login", async ({ page, request }) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "Operator login" })).toBeVisible();
   }
-  for (const path of ["/api/system/status", "/api/system/events", "/api/audit", "/api/auth/me"]) {
+  for (const path of [
+    "/api/system/status",
+    "/api/system/events",
+    "/api/system/events/stats",
+    "/api/system/health/history",
+    "/api/audit",
+    "/api/audit/stats",
+    "/api/auth/me",
+  ]) {
     expect((await request.get(path)).status(), path).toBe(401);
   }
   expect((await request.get("/api/docs")).status()).toBe(404);
@@ -102,6 +110,8 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await expect(page.getByRole("region", { name: "Database" })).toContainText("Healthy");
     await expect(page.getByRole("region", { name: "Redis" })).toContainText("Healthy");
     await expect(page.getByText("SPY", { exact: true })).toBeVisible();
+    await expect(page.getByRole("figure", { name: "Availability, last 24 hours" })).toBeVisible();
+    await expect(page.getByRole("figure", { name: /^Sign-ins, last \d+ days$/ })).toBeVisible();
     await page.screenshot({ path: `${SHOTS}overview.png`, fullPage: true });
   });
 
@@ -109,12 +119,19 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await menu(page, "System").click();
     await expect(page.getByRole("heading", { name: "How live trading is locked" })).toBeVisible();
     await expect(page.getByText(USERNAME, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("figure", { name: "Health history" })).toBeVisible();
     await page.screenshot({ path: `${SHOTS}system.png`, fullPage: true });
   });
 
   await test.step("events", async () => {
     await menu(page, "Events").click();
     await expect(page.getByRole("cell", { name: "api_started" }).first()).toBeVisible();
+    // The chart counts the same events, and can be read as a table instead.
+    const perDay = page.getByRole("figure", { name: "Events per day" });
+    await expect(perDay).toBeVisible();
+    await perDay.getByRole("button", { name: "Show table" }).click();
+    await expect(perDay.getByRole("table")).toBeVisible();
+    await perDay.getByRole("button", { name: "Show chart" }).click();
     await page.getByRole("button", { name: "Info" }).click();
     await expect(page).toHaveURL(/severity=info/);
     await page.getByRole("button", { name: /^Show details of event/ }).first().click();
@@ -127,6 +144,8 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     const firstRow = page.locator("tbody tr").first();
     await expect(firstRow).toContainText("login");
     await expect(firstRow).toContainText(USERNAME);
+    await expect(page.getByRole("figure", { name: "Activity per day" })).toBeVisible();
+    await expect(page.getByRole("figure", { name: "Actions" })).toContainText("login");
     await page.screenshot({ path: `${SHOTS}audit.png`, fullPage: true });
   });
 
@@ -134,6 +153,7 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await menu(page, "Risk limits").click();
     await expect(page.getByText("$300", { exact: true })).toBeVisible();
     await expect(page.getByRole("img", { name: "5 stop-outs" })).toBeVisible();
+    await expect(page.getByRole("figure", { name: "What one round trip costs" })).toBeVisible();
     await page.screenshot({ path: `${SHOTS}risk.png`, fullPage: true });
   });
 
