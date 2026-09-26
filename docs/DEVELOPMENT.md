@@ -5,6 +5,9 @@
 - Python 3.12 or newer (tested on 3.12 and 3.13).
 - PostgreSQL 16 and Redis 7 for the integration tests. The easiest source is the
   compose stack: `docker compose up -d postgres redis`.
+- For the dashboard: Node.js 22 and npm, only if you work on it outside Docker
+  (Debian's own Node is older; see <https://nodejs.org>). Docker alone is enough
+  to build it and run its tests.
 
 ## Set up
 
@@ -60,6 +63,55 @@ Alpaca, raises an error. No test can place an order or needs real keys.
 check is removed. When you add a check, break it on purpose and confirm a test
 goes red before you trust it.
 
+## The dashboard (`frontend/`)
+
+React 19 and TypeScript, built by Vite. Every package version is exact and
+locked with hashes in `package-lock.json`.
+
+```bash
+cd frontend
+npm ci                 # install exactly what package-lock.json lists
+npm run dev            # http://127.0.0.1:5173, /api passed to a local `strata api` on port 8000
+npm test               # unit tests (Vitest and Testing Library)
+npm run typecheck      # strict TypeScript
+npm run build          # type-check, then build into dist/
+```
+
+`npm run dev` needs the API running on this machine (`strata api`, with
+PostgreSQL and Redis) and an operator account (`strata operator create`).
+Browsers keep the login on `http://127.0.0.1` because they treat this computer
+as secure; any other address needs HTTPS.
+
+Without Node: `docker compose --profile test run --build --rm frontend-tests`.
+
+**Browser tests** (Playwright) drive the whole stack through nginx over HTTPS:
+login, every page, the dark theme, logging out, a phone-sized screen, strict
+headers, no console errors and no Content-Security-Policy violations. They save
+screenshots in `frontend/e2e/screenshots/`.
+
+```bash
+docker compose up --build -d
+cd frontend
+npx playwright install chromium          # once
+STRATA_E2E_USERNAME=alex STRATA_E2E_PASSWORD='...' npm run e2e
+```
+
+Rules the dashboard follows:
+
+- **Only real data.** A view whose data doesn't exist yet says so and names the
+  phase that brings it (the list is in `src/nav.tsx`). No sample numbers.
+- **Status is never colour alone.** Good, warning, serious and critical always
+  come with an icon and a word (`StatusBadge`). Chart colours and status colours
+  come from the dataviz reference palette in `src/styles/tokens.css`; pages use
+  the tokens, never raw colours, so light and dark mode change in one place.
+- **Nothing runs from data.** Text from the API is rendered as text; there is no
+  `dangerouslySetInnerHTML`, and the Content-Security-Policy would refuse it
+  anyway.
+- **Every request goes through `src/api/client.ts`**, which adds the
+  `X-Strata-Dashboard` header and turns failures into readable messages.
+- **The API's shapes are mirrored** in `src/api/types.ts`; change it together
+  with `strata/api/schemas.py`.
+
 ## Database migrations
 
 Tables are defined in `strata/db/models.py`; each schema change gets a new
@@ -108,6 +160,7 @@ Hashes mean pip refuses any package whose contents differ from what was locked.
 ```
 strata/             the application package
   api/              FastAPI app, auth, routes, response schemas
+  auth/             operator accounts, passwords, sessions, login limits
   db/               models, sessions, records, migrations helper
   cli.py            the `strata` command
   config.py         config.yaml (trading, risk, strategies)
@@ -117,6 +170,14 @@ strata/             the application package
   health.py         database, schema and Redis checks
   modes.py          backtest / paper / live and the live-mode lock
 migrations/         Alembic migrations
+frontend/           the dashboard
+  src/api/          API client, polling, shared system status
+  src/pages/        one file per page
+  src/components/   layout, banner, badges, sparkline, meters, filters
+  src/styles/       colour tokens (light and dark) and the stylesheet
+  nginx/            the HTTPS server's configuration
+  e2e/              browser tests of the running stack
+scripts/            make-dashboard-cert.sh
 tests/unit/         tests without services
 tests/integration/  tests against PostgreSQL and Redis
 docs/               the documentation

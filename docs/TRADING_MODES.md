@@ -47,6 +47,19 @@ is stricter than the brief's example and was already tested, so it stays.
 
 `GET /system/status` includes `live_trading_switch`: whether `.env` says
 `LIVE_TRADING=true`. It does **not** mean live trading is running; that also
-needs the flag and the typed phrase. From Phase 8 the running engine will report
-its actual mode, and from Phase 9 the dashboard will show an unmistakable
-PAPER / LIVE indicator.
+needs the flag and the typed phrase.
+
+## What the dashboard shows
+
+A strip across the top of every dashboard page shows the trading mode. Today it
+always says **PAPER**, because there is no trading engine yet and the dashboard
+itself has no way to place orders. On the right it shows the live switch:
+
+- **Live switch off**, with a lock: `LIVE_TRADING` isn't `true` in `.env`.
+- **Live switch ON**, on a yellow warning strip: `.env` says
+  `LIVE_TRADING=true`. Nothing trades live because of it alone, but it is one
+  of the four locks, so the dashboard makes it impossible to miss.
+
+The System page lists all four locks and which of them the dashboard can see.
+None of them can be changed from the dashboard. From Phase 8 the running engine
+will report its actual mode, and the strip will show that instead.

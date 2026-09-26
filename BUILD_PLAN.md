@@ -2,8 +2,8 @@
 
 This is the working plan for turning STRATA into a modular, multi-agent trading
 platform. It records what exists, the target architecture, the decisions taken
-and why, the phases, and the questions that need the operator's answer before
-the phases that depend on them.
+and why, the phases, and the operator's answers to the questions that change
+trading behaviour.
 
 Ground rules that apply to every phase:
 
@@ -42,7 +42,9 @@ Ground rules that apply to every phase:
   certificate. Both workarounds are sandbox-only; the project files use standard
   image names and need nothing special on a normal machine.
 - PostgreSQL 16 and Redis 7 installed and started locally for integration tests.
-- Node 22 available (dashboard, Phase 9).
+- Node 22 available (dashboard, Phase 1b). Playwright's Chromium is
+  pre-installed in an older build than the Playwright version expects, so the
+  browser tests are pointed at it with `STRATA_E2E_CHROMIUM` (sandbox only).
 - **Blocked here:** Alpaca's servers, `docs.github.com`, SSH to GitHub. Anything
   that talks to Alpaca is built behind an adapter, tested with deterministic
   mocks, and clearly marked as unverified against the real API until the operator
@@ -123,6 +125,10 @@ tools that touch orders.
 | D14 | Detailed docs live in `docs/`; `README.md` and this plan stay at the top level. | Keeps the top level readable. |
 | D15 | Dashboard: React and TypeScript built with Vite into static files, served by an unprivileged nginx that also terminates HTTPS and passes `/api/` to the API. The browser only ever talks to nginx, so there is no cross-origin access to configure. Certificates come from a local certificate authority whose name constraints limit it to this machine's names and private addresses. Everything else (PostgreSQL, Redis, the API) stays on `127.0.0.1` or the internal Docker network. | Modern, maintainable UI; one entry point to protect; devices on the home network trust the dashboard without warnings once the CA is installed. |
 | D16 | The dashboard shows only real data. Views for features that don't exist yet say so and name the phase that brings them; there are no mock charts or sample numbers. | A trading dashboard that shows invented numbers is worse than none. |
+| D17 | No HSTS header on the dashboard. | HSTS covers every port of a host name, so it would force HTTPS on unrelated services on `localhost` or this machine's name, and browsers ignore it for IP addresses. The `Secure` session cookie already keeps logins off plain HTTP. |
+| D18 | The dashboard container runs as the operator's user ID, with a read-only filesystem, no Linux capabilities, `no-new-privileges`, and only the certificate and its key as secrets. It never receives `.env`. | Least privilege: the part of STRATA that faces the network can't read the Alpaca keys, the database password or the API token. |
+| D19 | Login attempts are limited twice: the API pauses a name or address after 5 failures in 15 minutes, and nginx allows 10 attempts a minute per address. nginx sets `X-Real-IP` itself, replacing anything the caller sends. | Defence in depth against password guessing from the home network; the address that limits are counted by can't be forged. |
+| D20 | The overview's latency sparklines come from the dashboard's own polls and live only in the browser tab. The API stores no metrics yet. | Real readings without building a metrics store before anything needs one; scheduled heartbeats arrive with the scheduler in Phase 8. |
 
 ---
 
@@ -162,7 +168,7 @@ with Phase 8, and `BROKER_INTEGRATION.md` with Phase 10.
 | Phase | Deliverables | Done when |
 |---|---|---|
 | **1. Foundation** | `pyproject.toml`, lock files, ruff and mypy config; infrastructure settings; structured logging; PostgreSQL models and first migration (`system_events`, append-only `audit_logs`); Redis client; health checks; FastAPI (`/health`, `/health/ready`, `/system/status`) with token auth; `strata` CLI (`status`, `db upgrade`, `api`); Dockerfile and compose (postgres, redis, migrate, api, test profile); docs. | `docker compose up` gives a healthy API with migrations applied; unit and integration tests pass; ruff and mypy clean. **Done 25 Sep 2026.** |
-| **1b. Dashboard foundation** (brought forward from Phase 9 at the operator's request) | Operator accounts and sessions; `strata operator` commands; dashboard API (system status, events, audit log); the React dashboard with the PAPER/LIVE indicator, health, trading setup, risk limits, events and audit views; nginx with HTTPS and security headers; local certificate tooling; tests including a browser run. | The dashboard works over HTTPS from another device on the home network, shows live system data, and every protected view needs a login. |
+| **1b. Dashboard foundation** (brought forward from Phase 9 at the operator's request) | Operator accounts and sessions; `strata operator` commands; dashboard API (system status, events, audit log); the React dashboard with the PAPER/LIVE indicator, health, trading setup, risk limits, events and audit views; nginx with HTTPS and security headers; local certificate tooling; tests including a browser run. | The dashboard works over HTTPS from another device on the home network, shows live system data, and every protected view needs a login. **Done 26 Sep 2026.** |
 | **2. Market data** | Internal models (bars, quotes, trades, order book where available); `MarketDataProvider` interface; historical provider (Alpaca, cached to disk and recorded in `market_data_metadata`); deterministic mock provider; validation (gaps, duplicates, bad prices, stale data). | Data for SPY and BTC/USD loads through one interface; bad data is detected and refused. |
 | **3. Analysis** | Indicator library (moving averages, RSI, ATR, volatility, and so on), technical and quantitative analysis, regime detection. | Indicators match reference values; no look-ahead in any calculation. |
 | **4. Backtesting** | Event-driven engine (fees, spread, slippage, latency, sizing, stops, targets, partial fills, concurrent positions); metrics from the brief plus the original ones; equity, drawdown and trade-distribution outputs; train/validation/test and walk-forward; experiment records (dataset, dates, strategy version, parameters, git commit, results); versioned strategies (MA crossover 1.0.0, RSI 1.0.0). | The original SPY/BTC comparison runs end to end with out-of-sample results reported separately. |

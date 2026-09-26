@@ -23,13 +23,14 @@ STRATA is built in 14 phases; [BUILD_PLAN.md](BUILD_PLAN.md) has the details.
 | Phase | What it adds | Status |
 |---|---|---|
 | 1 | Foundation: config, secrets, logging, PostgreSQL, Redis, API, CLI, Docker, tests | **Done** |
+| 1b | Dashboard foundation: operator logins, the HTTPS web dashboard, health, setup, limits, events, audit log | **Done** |
 | 2 | Market data: one interface for prices, validation, cached history | Next |
 | 3 | Indicators, technical and quantitative analysis, market regimes | |
 | 4 | Backtesting with fees and slippage, walk-forward tests, experiment records | |
 | 5–6 | Analysis agents, the critic, the supervisor, structured trade proposals | |
 | 7 | Deterministic risk engine, portfolio checks, kill switch | |
 | 8 | Paper trading, order management, `close_all.py` | |
-| 9 | Dashboard and monitoring | |
+| 9 | Dashboard trading views: equity, positions, orders, P&L, agent decisions | |
 | 10–14 | Real broker adapter, security hardening, end-to-end tests, paper validation, live preparation | |
 
 **Nothing in STRATA can place an order yet.**
@@ -45,7 +46,7 @@ the answer.
 ### 1. Basic tools
 
 ```bash
-sudo apt update && sudo apt install -y git python3 openssh-client ca-certificates curl
+sudo apt update && sudo apt install -y git python3 openssh-client ca-certificates curl openssl
 ```
 
 If `sudo` is missing, or says you aren't allowed to use it: run `su -`, type the
@@ -135,13 +136,20 @@ it, and STRATA never prints or logs its contents. If `id -u` doesn't print
 
 ### 5. Start STRATA
 
+First make the dashboard's HTTPS certificate (once; run it as yourself, not
+with `sudo`), then start everything:
+
+```bash
+scripts/make-dashboard-cert.sh
+```
+
 ```bash
 docker compose up --build -d
 docker compose ps
 ```
 
-After a minute, `postgres`, `redis` and `api` should say `healthy`, and
-`migrate` should have exited. Then:
+After a minute, `postgres`, `redis`, `api` and `frontend` should say
+`healthy`, and `migrate` should have exited. Then:
 
 ```bash
 curl http://127.0.0.1:8000/health/ready
@@ -152,18 +160,40 @@ docker compose exec api python check_setup.py --connect
 The last one logs in to your Alpaca **paper** account (read-only) and fetches a
 few prices. It's the first real test of your keys.
 
-### 6. Run the tests
+### 6. Open the dashboard
+
+Make yourself an account (it asks for a password twice; at least 12
+characters):
+
+```bash
+docker compose exec api strata operator create YOUR_NAME
+```
+
+Open <https://localhost:8443> in a browser on this machine and log in. The
+browser warns about the certificate until you install STRATA's own
+certificate authority, `certs/strata-local-ca.crt`: see
+[Installing the CA on a device](docs/DEPLOYMENT.md#installing-the-ca-on-a-device).
+To open the dashboard from your phone or another computer on your home
+network, follow
+[Opening the dashboard from other devices](docs/DEPLOYMENT.md#opening-the-dashboard-from-other-devices).
+
+The strip across the top always shows the trading mode. Today it says
+**PAPER**, and the dashboard has no way to place orders.
+
+### 7. Run the tests
 
 ```bash
 docker compose --profile test run --build --rm tests
+docker compose --profile test run --build --rm frontend-tests
 ```
 
-### 7. Getting each new phase
+### 8. Getting each new phase
 
 ```bash
 git pull
 docker compose up --build -d
 docker compose --profile test run --build --rm tests
+docker compose --profile test run --build --rm frontend-tests
 ```
 
 Stop everything with `docker compose down` (your data is kept).
@@ -195,6 +225,10 @@ pytest
 | `strata status` | Settings summary and database / Redis health |
 | `strata db upgrade` | Bring the database schema up to date |
 | `strata db current` | Which migration the database is at |
+| `strata operator create NAME` | Make a dashboard account (asks for the password) |
+| `strata operator list` | Show the dashboard accounts |
+| `strata operator reset-password NAME` | Set a new password; logs out that account's sessions |
+| `strata operator disable NAME` / `enable NAME` | Lock or unlock an account; disabling logs it out everywhere |
 | `strata api` | Run the API (compose does this for you) |
 | `python check_setup.py [--connect]` | Read-only self-check; `--connect` logs in to your paper account |
 | `python main.py --mode backtest\|paper\|live` | The original start-up checks per mode. Paper is the default. No mode trades yet |
@@ -208,10 +242,15 @@ In Docker, prefix them with `docker compose exec api`, for example
 |---|---|---|
 | `GET /health` | public | the API process is running |
 | `GET /health/ready` | public | database, schema and Redis: yes/no each |
-| `GET /system/status` | token | versions, uptime, trading settings, detailed checks |
+| `GET /system/status` | login | versions, uptime, trading settings, detailed checks |
+| `GET /system/events` | login | system events, newest first, in pages |
+| `GET /audit` | login | the audit log, newest first, in pages |
+| `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | — | dashboard logins |
 
-Send the token as `Authorization: Bearer <ADMIN_API_TOKEN>`. Interactive docs
-are at <http://127.0.0.1:8000/docs>. The API only listens on this machine.
+"Login" means a dashboard session, or a script sending the token as
+`Authorization: Bearer <ADMIN_API_TOKEN>`. Interactive docs are at
+<http://127.0.0.1:8000/docs>. The API itself only listens on this machine;
+other devices reach it only through the dashboard, as `https://…:8443/api/`.
 
 ### How live mode is locked
 
@@ -234,12 +273,15 @@ STRATA refuses to start and tells you which. Details:
 | File | In plain words |
 |---|---|
 | `README.md` | This guide. |
-| `BUILD_PLAN.md` | The architecture, the decisions behind it, the 14 phases, and open questions for you. |
+| `BUILD_PLAN.md` | The architecture, the decisions behind it, the 14 phases, and the decisions you made. |
 | `config.yaml` | Trading settings: instruments, strategies, risk limits, costs, backtest dates. Every line is commented. |
 | `.env.example` | Template for your secrets file. Safe to share: it holds no values. |
 | `.env` | *You create this.* Keys, passwords and the API token. Never share or commit it. |
-| `docker-compose.yml` | Starts PostgreSQL, Redis, the migrations and the API, all bound to this machine only. |
+| `docker-compose.yml` | Starts PostgreSQL, Redis, the migrations, the API and the dashboard. Only the dashboard can be opened from other devices, and only if you choose. |
 | `Dockerfile` | How the STRATA container image is built. |
+| `frontend/` | The web dashboard (React and TypeScript), its tests, and `nginx/`: the HTTPS server in front of it. |
+| `scripts/make-dashboard-cert.sh` | Makes the dashboard's HTTPS certificate, from a certificate authority of your own that can only vouch for home-network names. |
+| `certs/` | *Made by the script.* The certificate, its key and the CA. Git ignores it. |
 | `pyproject.toml` | The project's packages and the settings for the test, lint and type-check tools. |
 | `requirements.txt`, `requirements-dev.txt` | Exact, hash-checked package versions (generated; don't edit by hand). |
 | `alembic.ini`, `migrations/` | Database schema changes, applied by `strata db upgrade`. |
@@ -253,7 +295,8 @@ STRATA refuses to start and tells you which. Details:
 | `strata/db/` | The database tables, connections with time limits, and the audit log writer. |
 | `strata/redis_client.py` | Redis connection for short-lived data. |
 | `strata/health.py` | Checks that the database, its schema and Redis are working. |
-| `strata/api/` | The web API: health, status, and token checks. |
+| `strata/api/` | The web API: health, status, events, audit log, logging in, and checking every caller. |
+| `strata/auth/` | Dashboard accounts: password hashing, sessions, and pausing logins after repeated failures. |
 | `strata/cli.py` | The `strata` command. |
 | `strata/alpaca_clients.py` | Connections to Alpaca with time limits; paper keys always reach the paper server. |
 | `tests/` | Automated tests. `unit/` needs nothing; `integration/` uses a real PostgreSQL and Redis. No test can reach the internet. |
@@ -443,7 +486,7 @@ anything on this machine.
   valid ones are listed in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - **`Permission denied` on `/run/secrets/strata_env`**: your user ID isn't 1000;
   see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#before-you-start).
-- **`port is already allocated`**: something else uses port 5432, 6379 or 8000.
+- **`port is already allocated`**: something else uses port 5432, 6379, 8000 or 8443.
 - **`couldn't reach Alpaca`**: check your internet connection. STRATA gives up
   after a time limit instead of hanging.
 - **`HTTP 401` or `HTTP 403` from Alpaca**: the keys were rejected. Paste the
@@ -453,12 +496,15 @@ anything on this machine.
   `HostName ssh.github.com` and add a line `    Port 443`.
 - **`Permission denied (publickey)`**: the deploy key isn't on GitHub yet, or the
   wrong line was pasted.
+- **The dashboard**: certificate warnings, keys it can't read, logging in, and
+  other devices are covered in
+  [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#troubleshooting).
 
 ## Documentation
 
-- [BUILD_PLAN.md](BUILD_PLAN.md): architecture, decisions, phases, open questions
+- [BUILD_PLAN.md](BUILD_PLAN.md): architecture, decisions, phases, your decisions
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how the pieces fit today
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): running with Docker, settings, backups
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): running with Docker, the dashboard and other devices, settings, backups
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): working on the code, tests, migrations
-- [docs/SECURITY.md](docs/SECURITY.md): secrets, the API, the audit log, known limits
+- [docs/SECURITY.md](docs/SECURITY.md): secrets, the API, the dashboard, the audit log, known limits
 - [docs/TRADING_MODES.md](docs/TRADING_MODES.md): backtest, paper, live and the live lock
