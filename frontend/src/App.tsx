@@ -1,5 +1,6 @@
 // Which page shows at which address, and the login gate in front of them.
 
+import { lazy } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
@@ -13,6 +14,12 @@ import { RiskPage } from "./pages/RiskPage";
 import { Splash, Unreachable } from "./pages/StatusScreens";
 import { SystemPage } from "./pages/SystemPage";
 import { NotFoundPage, UpcomingPage } from "./pages/UpcomingPage";
+
+// The Learn section is mostly text, loaded only when it is opened.
+const learn = () => import("./learn/LearnPages");
+const LearnIndex = lazy(() => learn().then((m) => ({ default: m.LearnIndex })));
+const LearnChapterPage = lazy(() => learn().then((m) => ({ default: m.LearnChapterPage })));
+const GlossaryPage = lazy(() => learn().then((m) => ({ default: m.GlossaryPage })));
 
 /** Every page except the login page needs a logged-in operator. */
 function RequireLogin() {
@@ -36,6 +43,9 @@ export function AppRoutes() {
         <Route path="events" element={<EventsPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="risk" element={<RiskPage />} />
+        <Route path="learn" element={<LearnIndex />} />
+        <Route path="learn/glossary" element={<GlossaryPage />} />
+        <Route path="learn/:chapter" element={<LearnChapterPage />} />
         {NAV_ITEMS.map((item) =>
           item.upcoming ? (
             <Route

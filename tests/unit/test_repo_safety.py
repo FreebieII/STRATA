@@ -47,9 +47,16 @@ def test_no_api_keys_written_into_the_code():
     files += list((PROJECT_ROOT / "strata").rglob("*.py")) + list(
         (PROJECT_ROOT / "tests").rglob("*.py")
     )
+    files += [path for path in (PROJECT_ROOT / "scripts").iterdir() if path.is_file()]
     files += [
         path
-        for pattern in ("src/**/*.ts", "src/**/*.tsx", "e2e/**/*.ts", "nginx/*.conf")
+        for pattern in (
+            "src/**/*.ts",
+            "src/**/*.tsx",
+            "src/**/*.json",
+            "e2e/**/*.ts",
+            "nginx/*.conf",
+        )
         for path in (PROJECT_ROOT / "frontend").glob(pattern)
     ]
     files.append(PROJECT_ROOT / ".env.example")

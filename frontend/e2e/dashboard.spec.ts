@@ -76,7 +76,7 @@ test("the certificate checks out against the local CA, and the headers are stric
 
 test("every protected view needs a login", async ({ page, request }) => {
   const problems = watchForProblems(page);
-  for (const path of ["/", "/system", "/events", "/audit", "/risk", "/positions"]) {
+  for (const path of ["/", "/system", "/events", "/audit", "/risk", "/positions", "/learn", "/learn/markets", "/learn/glossary"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "Operator login" })).toBeVisible();
   }
@@ -157,6 +157,31 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await page.screenshot({ path: `${SHOTS}risk.png`, fullPage: true });
   });
 
+  await test.step("learn: a chapter, its settings and pictures, and the glossary", async () => {
+    await menu(page, "How trading works").click();
+    await expect(page.getByRole("heading", { level: 1, name: "Learn" })).toBeVisible();
+    await page.screenshot({ path: `${SHOTS}learn.png`, fullPage: true });
+    await page.getByRole("link", { name: /Strategies: STRATA's two ideas/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Strategies: STRATA's two ideas" })).toBeVisible();
+    // The settings come from the running system's config.yaml.
+    await expect(page.getByRole("heading", { name: /20\/50 moving-average crossover/ })).toBeVisible();
+    await expect(page.getByRole("img", { name: /moving averages and \d+ crossover signals/ })).toBeVisible();
+    await expect(page.getByText("Illustration: made-up prices, not market data").first()).toBeVisible();
+    // Sources open the official page in a new tab, without giving it this one.
+    const source = page.locator("a.cite").first();
+    await expect(source).toHaveAttribute("target", "_blank");
+    await expect(source).toHaveAttribute("rel", /noopener/);
+    await page.screenshot({ path: `${SHOTS}learn-strategies.png`, fullPage: true });
+
+    await page.getByRole("link", { name: "whipsaw" }).first().click();
+    await expect(page).toHaveURL(/\/learn\/glossary#whipsaw$/);
+    await expect(page.locator("#whipsaw")).toHaveClass(/is-target/);
+    await expect(page.locator("#whipsaw")).toBeInViewport();
+    await page.getByRole("textbox", { name: "Find" }).fill("slippage");
+    await expect(page.getByText(/^\d+ of \d+ match “slippage”\.$/)).toBeVisible();
+    await page.screenshot({ path: `${SHOTS}learn-glossary.png` });
+  });
+
   await test.step("a planned page", async () => {
     await menu(page, /Backtests/).click();
     await expect(page.getByRole("heading", { name: "Nothing to show yet" })).toBeVisible();
@@ -204,6 +229,14 @@ test("works on a phone-sized screen", async ({ page }) => {
   await menu(page, "Events").click();
   await expect(page.getByRole("heading", { name: "Events" })).toBeVisible();
   await page.screenshot({ path: `${SHOTS}phone-events.png`, fullPage: true });
+  await page.getByRole("button", { name: "Open menu" }).click();
+  await menu(page, "How trading works").click();
+  await page.getByRole("link", { name: /Markets and what STRATA trades/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Markets and what STRATA trades" })).toBeVisible();
+  await expect(page.getByRole("figure", { name: /When markets trade/ })).toBeVisible();
+  const chapterOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(chapterOverflow).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `${SHOTS}phone-learn.png`, fullPage: true });
   await page.getByRole("button", { name: "Open menu" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page.getByText("You have logged out.")).toBeVisible();

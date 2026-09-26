@@ -248,3 +248,19 @@ export const IconUser = (p: IconProps) => (
     <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
   </Icon>
 );
+
+export const IconBook = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+    <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
+    <path d="M8 7.5h8M8 11h6" />
+  </Icon>
+);
+
+export const IconGlossary = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 18l4-11 4 11" />
+    <path d="M5 14h5" />
+    <path d="M14.5 10.5h6M14.5 14h6M14.5 17.5h4" />
+  </Icon>
+);

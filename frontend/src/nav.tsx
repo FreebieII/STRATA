@@ -7,7 +7,9 @@ import {
   IconAgents,
   IconAudit,
   IconBacktests,
+  IconBook,
   IconEvents,
+  IconGlossary,
   IconOrders,
   IconOverview,
   IconPerformance,
@@ -125,6 +127,22 @@ export const NAV: NavGroup[] = [
       },
     ],
   },
+  {
+    title: "Learn",
+    items: [
+      { path: "/learn", label: "How trading works", icon: IconBook },
+      { path: "/learn/glossary", label: "Glossary", icon: IconGlossary },
+    ],
+  },
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV.flatMap((group) => group.items);
+
+/** Is `item` the page at `pathname`? The page it matches most closely wins, so
+ * /learn/glossary is the glossary and /learn/markets is "How trading works". */
+export function isCurrent(item: NavItem, pathname: string): boolean {
+  const within = (path: string) =>
+    path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`);
+  if (!within(item.path)) return false;
+  return !NAV_ITEMS.some((other) => other.path.length > item.path.length && within(other.path));
+}

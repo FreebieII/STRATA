@@ -90,7 +90,7 @@ ignore = [
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
-files = ["strata", "main.py", "check_setup.py"]
+files = ["strata", "main.py", "check_setup.py", "scripts/dashboard_defaults.py"]
 strict = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true

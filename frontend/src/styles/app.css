@@ -1885,6 +1885,666 @@ svg {
   }
 }
 
+/* --- the Learn section ----------------------------------------------------------------------------- */
+
+.learn {
+  max-width: 860px;
+}
+
+.learn-chapter {
+  max-width: 1120px;
+}
+
+.learn-chapter__head {
+  margin-bottom: 8px;
+}
+
+.learn-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 32px;
+  align-items: start;
+}
+
+.learn-toc {
+  position: sticky;
+  top: calc(var(--banner-h) + 20px);
+  font-size: 13px;
+}
+
+.learn-toc__title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.learn-toc ol {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+}
+
+.learn-toc a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.learn-toc a:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.learn-toc a[aria-current="page"] {
+  background: var(--wash-strong);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.learn-article {
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.learn-article > * + *,
+.learn-article section > * + * {
+  margin-top: 14px;
+}
+
+.callout > div > * + * {
+  margin-top: 8px;
+}
+
+.learn-article h2 {
+  margin-top: 36px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  scroll-margin-top: calc(var(--banner-h) + 16px);
+}
+
+.learn-article h3 {
+  margin-top: 24px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.learn-article p,
+.learn-article li {
+  color: var(--ink);
+}
+
+.learn-article ul,
+.learn-article ol {
+  padding-left: 22px;
+}
+
+.learn-article li + li {
+  margin-top: 6px;
+}
+
+.learn-article .table {
+  font-size: 13.5px;
+}
+
+.learn-lede {
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.learn-term {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--baseline);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.learn-term:hover {
+  text-decoration-color: var(--ink);
+}
+
+.cite {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.cite:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.callout {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--series-1);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 14.5px;
+}
+
+.callout--careful {
+  border-left-color: var(--warning);
+  background: var(--warning-tint);
+}
+
+.callout__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.formula {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+  font: 13.5px/1.7 var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.learn-figure {
+  margin: 22px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.learn-figure__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+
+.learn-figure__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.learn-figure__tag {
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+}
+
+.learn-figure__tag--illustration {
+  border-style: dashed;
+}
+
+.learn-figure__caption {
+  margin-top: 8px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.plot {
+  position: relative;
+}
+
+.plot__svg {
+  display: block;
+  border-radius: 4px;
+  touch-action: pan-y;
+}
+
+.plot__line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.plot__span {
+  fill: var(--series-1);
+  opacity: 0.08;
+}
+
+.plot__level {
+  stroke: var(--baseline);
+  stroke-width: 1;
+}
+
+.chart-leader {
+  stroke: var(--baseline);
+  stroke-width: 1;
+}
+
+.plot__level-label {
+  fill: var(--ink-2);
+  font: 11px var(--font-sans);
+  /* A halo in the figure's colour keeps the label readable over a line. */
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.plot__marker {
+  fill: var(--ink);
+  stroke: var(--surface);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+
+.plot__dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.plot__readout {
+  min-height: 20px;
+  margin-top: 4px;
+  color: var(--muted);
+  font: 12px/1.5 var(--font-mono);
+}
+
+.plot__readout--hint {
+  font-family: var(--font-sans);
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.trade__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade__note {
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.candles {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+}
+
+.candle__wick {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.candle__body {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.candle__body--up {
+  fill: var(--surface);
+}
+
+.candle__body--down {
+  fill: var(--ink);
+}
+
+.candle__labels text {
+  fill: var(--ink-2);
+  font: 12px var(--font-sans);
+}
+
+/* One grid for the whole book, shared by every row (subgrid), so each bar is
+   drawn on the same scale whether or not its row has a note. */
+.book {
+  display: grid;
+  grid-template-columns: 64px minmax(96px, 1fr) max-content minmax(0, max-content);
+  column-gap: 10px;
+  row-gap: 3px;
+  max-width: 640px;
+}
+
+.book__side,
+.book__spread {
+  grid-column: 1 / -1;
+}
+
+.book__side {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.book__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.book__row.is-best {
+  background: var(--wash-strong);
+}
+
+.book__track {
+  display: block;
+}
+
+.book__bar {
+  display: block;
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: var(--quiet-2);
+}
+
+.book__count {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.book__note {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.book__spread {
+  margin: 4px 0;
+  padding: 2px 6px;
+  border-top: 1px solid var(--baseline);
+  border-bottom: 1px solid var(--baseline);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: center;
+}
+
+.session__track {
+  fill: var(--nodata);
+}
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 8px;
+  padding: 0 !important;
+  list-style: none;
+}
+
+.pipeline__group {
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pipeline__group:first-of-type {
+  margin-top: 4px;
+}
+
+.pipeline__step {
+  display: grid;
+  gap: 2px;
+  margin: 0 !important;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+}
+
+.pipeline__step--gate {
+  border-color: var(--ink);
+  border-style: solid;
+  background: var(--surface);
+}
+
+.pipeline__name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.pipeline__does {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.pipeline__phase {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+  list-style: none;
+}
+
+.learn-intro {
+  margin-top: 28px;
+}
+
+.learn-title {
+  margin: 4px 0 8px;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+}
+
+.learn-toc__title--next {
+  margin-top: 16px;
+}
+
+.chapter-nav .chapter-nav__next {
+  text-align: right;
+}
+
+.glossary-find {
+  width: 260px;
+}
+
+.chapter-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.chapter-card:hover {
+  border-color: var(--border-strong);
+  background: var(--wash);
+}
+
+.chapter-card__number {
+  color: var(--muted);
+  font: 500 12px var(--font-mono);
+}
+
+.chapter-card__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chapter-card__summary {
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
+}
+
+.chapter-nav a {
+  display: grid;
+  gap: 2px;
+  max-width: 48%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chapter-nav a:hover .chapter-nav__title {
+  text-decoration: underline;
+}
+
+.chapter-nav__dir {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chapter-nav__title {
+  font-weight: 600;
+}
+
+.sources {
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
+  font-size: 13px;
+}
+
+.sources li {
+  color: var(--ink-2) !important;
+}
+
+.glossary-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+  margin-bottom: 16px;
+}
+
+.letters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.letters a {
+  min-width: 24px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  font: 500 12.5px var(--font-mono);
+  text-align: center;
+  text-decoration: none;
+}
+
+.letters a:hover {
+  background: var(--wash-strong);
+  color: var(--ink);
+}
+
+.glossary {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.glossary__letter {
+  margin: 20px 0 4px;
+  color: var(--muted);
+  font: 600 13px var(--font-mono);
+  scroll-margin-top: calc(var(--banner-h) + 16px);
+}
+
+.glossary__entry {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--grid);
+  scroll-margin-top: calc(var(--banner-h) + 16px);
+}
+
+/* The entry a link led to. (A class, not :target, which in-app links don't set.) */
+.glossary__entry.is-target {
+  border-radius: 6px;
+  background: var(--wash-strong);
+  box-shadow: 0 0 0 8px var(--wash-strong);
+}
+
+.glossary__term {
+  font-weight: 600;
+}
+
+.glossary__short {
+  margin-left: 6px;
+  color: var(--ink-2);
+  font: 12.5px var(--font-mono);
+}
+
+.glossary__meaning {
+  margin-top: 2px;
+}
+
+.glossary__strata {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.glossary__strata strong {
+  color: var(--ink);
+}
+
+@media (max-width: 1100px) {
+  .learn-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  /* Above the text on narrow screens, as a short run of links; the chapter
+     list is left out (the Learn link and Previous/Next cover it). */
+  .learn-toc {
+    position: static;
+    order: -1;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--grid);
+  }
+
+  .learn-toc ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+  }
+
+  .learn-toc a {
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+  }
+
+  .learn-toc__chapters {
+    display: none;
+  }
+}
+
 /* --- smaller screens ------------------------------------------------------------------------------ */
 
 @media (max-width: 1100px) {

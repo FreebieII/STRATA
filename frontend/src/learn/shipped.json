@@ -1,0 +1,57 @@
+{
+  "live_trading_switch": false,
+  "default_mode": "paper",
+  "timezone": "America/New_York",
+  "instruments": [
+    {
+      "symbol": "SPY",
+      "asset_class": "stock",
+      "strategy": "ma_crossover",
+      "enabled": true
+    },
+    {
+      "symbol": "BTC/USD",
+      "asset_class": "crypto",
+      "strategy": "ma_crossover",
+      "enabled": true
+    }
+  ],
+  "risk_limits": {
+    "MAX_CAPITAL": 300.0,
+    "MAX_POSITION_PCT": 20.0,
+    "STOP_LOSS_PCT": 5.0,
+    "DAILY_LOSS_LIMIT": 15.0,
+    "TOTAL_LOSS_LIMIT": 60.0,
+    "MAX_TRADES_PER_DAY": 3,
+    "max_position_value": 60.0
+  },
+  "strategies": {
+    "ma_crossover": {
+      "fast_period": 20,
+      "slow_period": 50
+    },
+    "rsi_reversion": {
+      "rsi_period": 14,
+      "buy_below": 30.0,
+      "sell_above": 70.0
+    }
+  },
+  "costs": {
+    "stock": {
+      "fee_pct": 0.0,
+      "fee_per_sell_usd": 0.02,
+      "slippage_pct": 0.05
+    },
+    "crypto": {
+      "fee_pct": 0.25,
+      "fee_per_sell_usd": 0.0,
+      "slippage_pct": 0.15
+    }
+  },
+  "backtest": {
+    "start_date": "2021-01-01",
+    "test_start_date": "2024-07-01",
+    "end_date": null
+  },
+  "stock_data_feed": "sip"
+}

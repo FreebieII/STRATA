@@ -1,14 +1,14 @@
 // The frame around every page once logged in: the trading-mode banner, the
 // menu, the operator's name, the theme switch and logging out.
 
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router";
+import { Suspense, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { SystemStatusProvider, useSystemStatus } from "../api/SystemStatusContext";
 import { useAuth } from "../auth/AuthContext";
 import { localTimeZone, shortCommit } from "../lib/format";
 import { useTheme, type ThemeChoice } from "../lib/theme";
-import { NAV } from "../nav";
+import { isCurrent, NAV } from "../nav";
 import { IconClose, IconLogOut, IconMenu, IconMonitor, IconMoon, IconSun, IconUser } from "./Icons";
 import { ModeBanner } from "./ModeBanner";
 
@@ -70,6 +70,7 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const username = state.phase === "signed-in" ? state.identity.username : null;
+  const { pathname } = useLocation();
 
   const onLogout = async () => {
     setLogoutError(null);
@@ -113,20 +114,23 @@ export function Layout() {
                   <div className="nav__group" key={group.title}>
                     <p className="nav__title">{group.title}</p>
                     <ul>
-                      {group.items.map((item) => (
-                        <li key={item.path}>
-                          <NavLink
-                            to={item.path}
-                            end={item.path === "/"}
-                            className={({ isActive }) => `nav__link${isActive ? " is-active" : ""}`}
-                            onClick={() => setMenuOpen(false)}
-                          >
-                            <item.icon size={16} />
-                            <span className="nav__label">{item.label}</span>
-                            {item.upcoming ? <span className="nav__tag">Planned</span> : null}
-                          </NavLink>
-                        </li>
-                      ))}
+                      {group.items.map((item) => {
+                        const current = isCurrent(item, pathname);
+                        return (
+                          <li key={item.path}>
+                            <Link
+                              to={item.path}
+                              className={`nav__link${current ? " is-active" : ""}`}
+                              aria-current={current ? "page" : undefined}
+                              onClick={() => setMenuOpen(false)}
+                            >
+                              <item.icon size={16} />
+                              <span className="nav__label">{item.label}</span>
+                              {item.upcoming ? <span className="nav__tag">Planned</span> : null}
+                            </Link>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))}
@@ -153,7 +157,15 @@ export function Layout() {
           </aside>
           <main id="main" className="main" tabIndex={-1}>
             <div className="main__content">
-              <Outlet />
+              <Suspense
+                fallback={
+                  <p className="muted" role="status">
+                    Loading…
+                  </p>
+                }
+              >
+                <Outlet />
+              </Suspense>
             </div>
             <Footer />
           </main>
