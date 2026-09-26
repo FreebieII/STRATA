@@ -12,12 +12,13 @@ Tests pass their own `Services`, so the API can be tested without a database.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from time import perf_counter
 
@@ -43,6 +44,7 @@ from ..logging_setup import log_context, log_event, register_secrets
 from ..redis_client import make_redis
 from ..settings import Settings
 from .auth_routes import router as auth_router
+from .health_history import SAMPLE_EVERY_S, HealthHistory, Sampler
 from .routes import router
 from .store import DatabaseStore, Store
 
@@ -66,6 +68,9 @@ class Services:
     login_limiter: LoginLimiter
     close: Callable[[], None]
     started_at: datetime
+    health_history: HealthHistory = field(default_factory=HealthHistory)
+    # Seconds between the API's own health readings; None switches them off.
+    sample_health_every_s: float | None = SAMPLE_EVERY_S
 
 
 def build_services(settings: Settings) -> Services:
@@ -105,9 +110,21 @@ def create_app(services: Services) -> FastAPI:
         log_event("api_started", f"API {__version__} started")
         if services.api_token is None:
             log.warning("ADMIN_API_TOKEN is not set: only dashboard logins can use the API")
+        sampler = None
+        if services.sample_health_every_s:
+            sampler = Sampler(
+                services.health_history,
+                services.health_checks,
+                services.store.record_event,
+                services.sample_health_every_s,
+            )
+            sampler.start()
         try:
             yield
         finally:
+            if sampler is not None:
+                # Wait for a reading in progress before closing its connections.
+                await asyncio.to_thread(sampler.stop)
             services.store.record_event("api_stopped", "API stopped")
             log_event("api_stopped", "API stopped")
             services.close()

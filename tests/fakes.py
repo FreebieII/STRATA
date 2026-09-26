@@ -152,13 +152,15 @@ class FakeStore:
             "valid_since": self._now().replace(year=2000),
         }
 
-    def record_event(self, event_type, message, *, severity="info", details=None, request_id=None):
+    def record_event(
+        self, event_type, message, *, severity="info", details=None, request_id=None, at=None
+    ):
         from strata.api.schemas import SystemEventOut
 
         self.events.append(
             SystemEventOut(
                 id=len(self.events) + 1,
-                occurred_at=self._now(),
+                occurred_at=at or self._now(),
                 component="api",
                 event_type=event_type,
                 severity=severity,
@@ -169,7 +171,15 @@ class FakeStore:
         )
 
     def record_audit(
-        self, *, actor, action, target_type=None, target_id=None, details=None, request_id=None
+        self,
+        *,
+        actor,
+        action,
+        target_type=None,
+        target_id=None,
+        details=None,
+        request_id=None,
+        at=None,
     ):
         from strata.api.schemas import AuditEntryOut
 
@@ -177,7 +187,7 @@ class FakeStore:
         self.audit.append(
             AuditEntryOut(
                 id=len(self.audit) + 1,
-                occurred_at=self._now(),
+                occurred_at=at or self._now(),
                 actor=actor,
                 action=action,
                 target_type=target_type,
@@ -201,7 +211,7 @@ class FakeStore:
             return None
         return operator["valid_since"]
 
-    def recent_events(self, *, limit, before_id=None, severity=None, event_type=None):
+    def recent_events(self, *, limit, before_id=None, severity=None, event_type=None, since=None):
         self._check()
         rows = [
             event
@@ -209,15 +219,61 @@ class FakeStore:
             if (before_id is None or event.id < before_id)
             and (severity is None or event.severity == severity)
             and (event_type is None or event.event_type == event_type)
+            and (since is None or event.occurred_at >= since)
         ]
         return rows[:limit]
 
-    def recent_audit(self, *, limit, before_id=None, action=None):
+    def recent_audit(self, *, limit, before_id=None, action=None, since=None):
         self._check()
         rows = [
             entry
             for entry in reversed(self.audit)
             if (before_id is None or entry.id < before_id)
             and (action is None or entry.action == action)
+            and (since is None or entry.occurred_at >= since)
         ]
         return rows[:limit]
+
+    # The same answers the database gives, worked out in Python.
+    def event_stats(self, *, days, tz, event_type=None):
+        from collections import Counter
+
+        from strata.api import stats
+
+        self._check()
+        since, day_list = stats.period(days, tz, self._now())
+        rows = [
+            e
+            for e in self.events
+            if e.occurred_at >= since and (event_type is None or e.event_type == event_type)
+        ]
+        counts = Counter((stats.local_day(e.occurred_at, tz), e.severity) for e in rows)
+        types = Counter(e.event_type for e in rows)
+        return stats.event_stats(
+            days=days,
+            tz=tz,
+            since=since,
+            day_list=day_list,
+            counts=[(day, severity, n) for (day, severity), n in counts.items()],
+            types=sorted(types.items(), key=lambda item: (-item[1], item[0])),
+        )
+
+    def audit_stats(self, *, days, tz, action=None):
+        from collections import Counter
+
+        from strata.api import stats
+
+        self._check()
+        since, day_list = stats.period(days, tz, self._now())
+        counts = Counter(
+            (stats.local_day(a.occurred_at, tz), a.action)
+            for a in self.audit
+            if a.occurred_at >= since and (action is None or a.action == action)
+        )
+        return stats.audit_stats(
+            days=days,
+            tz=tz,
+            since=since,
+            day_list=day_list,
+            counts=[(day, name, n) for (day, name), n in counts.items()],
+        )

@@ -28,7 +28,9 @@ class StandIn:
         self.closed = False
         self.redis_ok = True
 
-    def services(self, *, token: str | None = FAKE_API_TOKEN) -> Services:
+    def services(
+        self, *, token: str | None = FAKE_API_TOKEN, sample_health_every_s: float | None = None
+    ) -> Services:
         def health_checks() -> list[ComponentHealth]:
             return [
                 ComponentHealth("database", True, "reachable", 1.0),
@@ -56,6 +58,8 @@ class StandIn:
             login_limiter=LoginLimiter(self.redis),
             close=close,
             started_at=datetime.now(UTC),
+            # Off unless a test asks: readings are added by hand instead.
+            sample_health_every_s=sample_health_every_s,
         )
 
 
