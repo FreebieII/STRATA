@@ -1,0 +1,107 @@
+/*
+ * Colour and type tokens. Pages and components use these roles, never raw
+ * colours, so light and dark mode change in one place.
+ *
+ * Chart colours, ink and status colours come from the validated reference
+ * palette (dataviz skill, references/palette.md). The four status colours are
+ * the same in both themes and always appear with an icon and a word.
+ */
+
+:root {
+  color-scheme: light;
+
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.18);
+  --wash: rgba(11, 11, 11, 0.035);
+  --wash-strong: rgba(11, 11, 11, 0.07);
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04);
+  --shadow-raised: 0 1px 2px rgba(11, 11, 11, 0.05), 0 12px 32px rgba(11, 11, 11, 0.07);
+
+  /* Series 1 (blue) and its sequential ramp's lightest step, for meter tracks. */
+  --series-1: #2a78d6;
+  --series-1-track: #cde2fb;
+  --focus: #2a78d6;
+
+  --good-tint: rgba(12, 163, 12, 0.1);
+  --warning-tint: rgba(250, 178, 25, 0.16);
+  --serious-tint: rgba(236, 131, 90, 0.14);
+  --critical-tint: rgba(208, 59, 59, 0.09);
+
+  /* Fixed in both themes. */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --on-status: #0b0b0b;
+
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --banner-h: 44px;
+  --radius: 10px;
+}
+
+/* Dark: the device asks for it, unless the viewer picked light... */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --wash: rgba(255, 255, 255, 0.04);
+    --wash-strong: rgba(255, 255, 255, 0.08);
+    --shadow: none;
+    --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+    --series-1: #3987e5;
+    --series-1-track: #104281;
+    --focus: #3987e5;
+
+    --good-tint: rgba(12, 163, 12, 0.16);
+    --warning-tint: rgba(250, 178, 25, 0.14);
+    --serious-tint: rgba(236, 131, 90, 0.16);
+    --critical-tint: rgba(208, 59, 59, 0.2);
+  }
+}
+
+/* ...or the viewer picked dark on the dashboard. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --wash: rgba(255, 255, 255, 0.04);
+  --wash-strong: rgba(255, 255, 255, 0.08);
+  --shadow: none;
+  --shadow-raised: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  --series-1: #3987e5;
+  --series-1-track: #104281;
+  --focus: #3987e5;
+
+  --good-tint: rgba(12, 163, 12, 0.16);
+  --warning-tint: rgba(250, 178, 25, 0.14);
+  --serious-tint: rgba(236, 131, 90, 0.16);
+  --critical-tint: rgba(208, 59, 59, 0.2);
+}
