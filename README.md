@@ -183,8 +183,11 @@ The strip across the top always shows the trading mode. Today it says
 
 New to trading? **Learn** in the menu explains how it works, from order types
 and fees to backtesting, and how STRATA does each part, with STRATA's own
-settings and links to the official rules. Its glossary covers every word and
-abbreviation used.
+settings and links to the official rules. Each chapter starts with its main
+points, has labs to try (follow a stop-loss through an overnight gap, trade a
+moving-average crossover, watch an overfitted backtest fall apart, send a
+pretend trade through STRATA's rules), and ends with a few questions that
+explain every answer. Its glossary covers every word and abbreviation used.
 
 ### 7. Run the tests
 

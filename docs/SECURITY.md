@@ -126,6 +126,10 @@ file can't enable live mode; a test checks it.
   `Secure` cookie already keeps sessions off plain HTTP.
 - The dashboard only reads. It has no way to place, change or cancel orders,
   or to change any setting.
+- The Learn section keeps the reader's progress (which chapters were opened,
+  quiz scores) in the browser's localStorage, per browser and device. It holds
+  no personal data and never reaches the API; anything malformed in it is
+  ignored.
 - The Learn section's links to official sites open in a new tab with
   `rel="noopener noreferrer"`, so those pages get no hold on the dashboard's tab
   and aren't told where the reader came from. The section's code is loaded

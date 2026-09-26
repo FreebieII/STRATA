@@ -106,6 +106,16 @@ registry is `frontend/src/learn/sources.ts`); pictures drawn from invented
 prices are labelled as illustrations, and their captions are worked out from
 the same numbers they draw.
 
+Each chapter opens with its main points ("In short") and ends with a short
+quiz whose every answer is explained (`checks.ts`). In between are labs: an
+order walking the order book, one sell order followed day by day through a
+gap, a moving-average crossover and the RSI worked out step by step, position
+sizing, the overfitting machine, and a pretend trade walked through STRATA's
+rules. Their arithmetic is in `labs/sim.ts`, pure functions checked by hand in
+`labs/sim.test.ts`; the components only draw what those return. Which chapters
+were opened and each quiz's score are kept in the browser (localStorage) and
+shown on the Learn index; nothing about them reaches the API.
+
 ## Three kinds of settings
 
 ```

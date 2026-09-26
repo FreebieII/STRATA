@@ -140,6 +140,15 @@ enforce most of this; the rest is for review.
 - **STRATA's numbers come from its settings.** Use `useSetup()`. After changing
   `config.yaml`, run `python scripts/dashboard_defaults.py`; a Python test fails
   until you do.
+- **Labs compute, components draw.** A lab's arithmetic goes in `labs/sim.ts`
+  as a pure function with a hand-checked test; the component only shows what
+  it returns, and its tag says what its numbers are (made-up prices,
+  arithmetic, or STRATA's rules).
+- **No look-ahead, even in a lab.** A signal made by a day's close is acted on
+  the next day. The Testing chapter warns against trading at the close that
+  made the signal, so nothing in the section does it.
+- **Quizzes teach.** Every answer's explanation says why, in the chapter's own
+  terms, and adds no new facts. Questions that quote a setting compute it.
 - **Nothing is advice.** Explain; don't recommend buying or selling anything.
 
 ## Database migrations
