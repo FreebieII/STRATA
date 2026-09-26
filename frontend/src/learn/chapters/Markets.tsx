@@ -1,4 +1,5 @@
 import { CandleDiagram, SessionClock, SpreadDiagram } from "../illustrations/Illustrations";
+import { OrderBookLab } from "../labs/OrderBookLab";
 import { Callout, Cite, Section, Term } from "../Prose";
 import { useSetup } from "../useSetup";
 
@@ -116,6 +117,7 @@ export function MarketsChapter() {
           <Cite id="investor-spread" />.
         </p>
         <SpreadDiagram />
+        <OrderBookLab />
         <p>
           Over a day, prices are summed up as a bar or <Term id="candle">candle</Term>: open, high,
           low and close (<Term id="ohlcv">OHLC</Term>), usually with the{" "}

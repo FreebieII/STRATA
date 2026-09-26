@@ -1,6 +1,7 @@
 import { COST_LEGEND, CostBars, smallPct } from "../../charts/CostBars";
 import { roundTrip } from "../../lib/costs";
 import { Figure } from "../illustrations/Illustrations";
+import { OrderLab } from "../labs/OrderLab";
 import { Callout, Cite, Section, Term } from "../Prose";
 import { useSetup } from "../useSetup";
 
@@ -101,6 +102,7 @@ export function OrdersChapter() {
           stop order, that means a stop-limit, or STRATA watching the price itself and selling. Phase
           8 settles this, and its limits, before any trading starts.
         </Callout>
+        <OrderLab stopPct={setup.risk_limits.STOP_LOSS_PCT} positionUsd={setup.risk_limits.max_position_value} />
       </Section>
 
       <Section id="time-in-force" title="How long an order lasts">

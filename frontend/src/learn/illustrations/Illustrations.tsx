@@ -140,7 +140,9 @@ export function RsiIllustration({
   const line = rsi(RANGING, period);
   const signals = rsiSignals(line, buyBelow, sellAbove);
   const spans = holdingSpans(signals, RANGING.length - 1);
-  const trades = spans.map((span) => RANGING[span.to]! / RANGING[span.from]! - 1);
+  // Each signal is acted on the next day: a signal needs that day's close.
+  const next = (day: number) => RANGING[Math.min(day + 1, RANGING.length - 1)]!;
+  const trades = spans.filter((span) => span.from + 1 < RANGING.length).map((span) => next(span.to) / next(span.from) - 1);
   const won = trades.filter((r) => r > 0).length;
   const open = signals.length % 2 === 1;
   return (

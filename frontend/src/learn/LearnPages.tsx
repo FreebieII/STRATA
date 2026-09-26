@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link, useLocation, useParams } from "react-router";
 
+import { IconGood } from "../components/Icons";
 import { PageHeader } from "../components/Parts";
 import { NotFoundPage } from "../pages/UpcomingPage";
 import { MARKETS_SOURCES, MarketsChapter } from "./chapters/Markets";
@@ -11,8 +12,11 @@ import { RISK_SOURCES, RiskChapter } from "./chapters/Risk";
 import { STRATA_SOURCES, StrataChapter } from "./chapters/Strata";
 import { STRATEGIES_SOURCES, StrategiesChapter } from "./chapters/Strategies";
 import { TESTING_SOURCES, TestingChapter } from "./chapters/Testing";
+import { CHECKS } from "./checks";
 import { GLOSSARY, sortKey, strataNote } from "./glossary";
-import { Cite, SourceList } from "./Prose";
+import { useLearnProgress } from "./progress";
+import { Cite, KeyIdeas, SourceList } from "./Prose";
+import { Quiz } from "./Quiz";
 import type { SourceId } from "./sources";
 import { useSetup } from "./useSetup";
 
@@ -144,22 +148,69 @@ function Disclaimer() {
 
 export function LearnIndex() {
   const { live } = useSetup();
+  const { progress, clear } = useLearnProgress();
+  const checked = CHAPTERS.filter((c) => progress[c.id]?.quiz).length;
+  const next = CHAPTERS.find((c) => !progress[c.id]?.quiz);
+  const started = CHAPTERS.some((c) => progress[c.id]?.opened);
   return (
     <div className="learn">
       <PageHeader
         title="Learn"
         description="How trading works, from the first order to the last abbreviation, and how STRATA does each part."
       />
+      <div className="learn-progress" role="status">
+        <p>
+          {started ? (
+            <>
+              <strong>
+                {checked} of {CHAPTERS.length} chapters checked.
+              </strong>{" "}
+              {next ? (
+                <>
+                  Next: <Link to={`/learn/${next.id}`}>{next.title}</Link>.
+                </>
+              ) : (
+                "You've been through them all."
+              )}
+            </>
+          ) : (
+            <>
+              <strong>Start with chapter 1</strong>, or anywhere you like. Each chapter begins with
+              its main points, has things to try, and ends with a few questions to check yourself.
+            </>
+          )}
+        </p>
+        {started ? (
+          <button type="button" className="button button--small button--ghost" onClick={clear}>
+            Forget my progress
+          </button>
+        ) : null}
+      </div>
       <ol className="chapters" aria-label="Chapters">
-        {CHAPTERS.map((chapter, i) => (
-          <li key={chapter.id}>
-            <Link className="chapter-card" to={`/learn/${chapter.id}`}>
-              <span className="chapter-card__number">Chapter {i + 1}</span>
-              <span className="chapter-card__title">{chapter.title}</span>
-              <span className="chapter-card__summary">{chapter.summary}</span>
-            </Link>
-          </li>
-        ))}
+        {CHAPTERS.map((chapter, i) => {
+          const done = progress[chapter.id]?.quiz;
+          const opened = progress[chapter.id]?.opened;
+          return (
+            <li key={chapter.id}>
+              <Link className={`chapter-card${done ? " is-done" : ""}`} to={`/learn/${chapter.id}`}>
+                <span className="chapter-card__number">Chapter {i + 1}</span>
+                <span className="chapter-card__title">{chapter.title}</span>
+                <span className="chapter-card__summary">{chapter.summary}</span>
+                <span className="chapter-card__status">
+                  {done ? (
+                    <>
+                      <IconGood size={14} /> Checked: {done.correct} of {done.total} right
+                    </>
+                  ) : opened ? (
+                    "Opened, not checked yet"
+                  ) : (
+                    "Not started"
+                  )}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
         <li>
           <Link className="chapter-card" to="/learn/glossary">
             <span className="chapter-card__number">A to Z</span>
@@ -186,10 +237,16 @@ export function LearnIndex() {
 
 export function LearnChapterPage() {
   const { chapter: id } = useParams();
+  const { setup } = useSetup();
+  const { markOpened } = useLearnProgress();
   useScrollToHash();
   const index = CHAPTERS.findIndex((c) => c.id === id);
   const chapter = CHAPTERS[index];
+  useEffect(() => {
+    if (chapter) markOpened(chapter.id);
+  }, [chapter, markOpened]);
   if (!chapter) return <NotFoundPage />;
+  const checks = CHECKS[chapter.id];
   const Body = chapter.body;
   const previous = CHAPTERS[index - 1];
   const next = CHAPTERS[index + 1];
@@ -208,7 +265,9 @@ export function LearnChapterPage() {
       </header>
       <div className="learn-layout">
         <article className="learn-article" aria-labelledby="chapter-title">
+          {checks ? <KeyIdeas items={checks.keyIdeas(setup)} /> : null}
           <Body />
+          {checks ? <Quiz chapterId={chapter.id} questions={checks.quiz(setup)} /> : null}
           {chapter.sources.length ? <SourceList ids={[...chapter.sources]} /> : null}
           <Disclaimer />
           <nav className="chapter-nav" aria-label="Chapters">
@@ -234,6 +293,11 @@ export function LearnChapterPage() {
                 <a href={`#${section.id}`}>{section.title}</a>
               </li>
             ))}
+            {checks ? (
+              <li>
+                <a href="#quiz">Check yourself</a>
+              </li>
+            ) : null}
           </ol>
           <div className="learn-toc__chapters">
             <p className="learn-toc__title learn-toc__title--next">Chapters</p>

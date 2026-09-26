@@ -1,4 +1,7 @@
+import { roundTrip } from "../../lib/costs";
 import { CrossoverIllustration, RsiIllustration } from "../illustrations/Illustrations";
+import { CrossoverLab } from "../labs/CrossoverLab";
+import { RsiStepper } from "../labs/RsiStepper";
 import { Callout, Cite, Formula, Section, Term } from "../Prose";
 import { useSetup } from "../useSetup";
 
@@ -67,6 +70,14 @@ export function StrategiesChapter() {
           <li>Long only: when not holding, it is in cash.</li>
         </ul>
         <CrossoverIllustration fast={ma.fast_period} slow={ma.slow_period} />
+        <CrossoverLab
+          fast={ma.fast_period}
+          slow={ma.slow_period}
+          costPct={{
+            stock: roundTrip(setup.costs.stock, setup.risk_limits.max_position_value).breakevenPct,
+            crypto: roundTrip(setup.costs.crypto, setup.risk_limits.max_position_value).breakevenPct,
+          }}
+        />
         <p>
           <strong>Strengths:</strong> simple, and it stays in for the whole of a long trend.{" "}
           <strong>Weaknesses:</strong> averages lag, so it buys after a rise has started and sells
@@ -91,6 +102,7 @@ export function StrategiesChapter() {
           If prices only rose, the average loss is zero and RSI is 100; if rises and falls balance,
           RSI is 50.
         </p>
+        <RsiStepper period={r.rsi_period} buyBelow={r.buy_below} sellAbove={r.sell_above} />
       </Section>
 
       <Section id="rsi-strategy" title={`STRATA's second strategy: RSI mean reversion (${r.rsi_period}, ${r.buy_below}/${r.sell_above})`}>

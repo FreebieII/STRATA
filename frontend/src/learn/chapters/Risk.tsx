@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import { DrawdownIllustration, RecoveryCurve, StopTargetIllustration } from "../illustrations/Illustrations";
+import { SizingLab } from "../labs/SizingLab";
 import { Callout, Cite, Section, Term } from "../Prose";
 import { useSetup } from "../useSetup";
 
@@ -43,6 +44,7 @@ export function RiskChapter() {
           at most {r.MAX_POSITION_PCT}% of it, ${r.max_position_value}, into any one position (
           <span className="mono">MAX_POSITION_PCT</span>).
         </p>
+        <SizingLab limits={r} />
       </Section>
 
       <Section id="stops" title="Stop-loss and take-profit">

@@ -495,6 +495,12 @@ export const GLOSSARY: Entry[] = [
     source: "alpaca-orders",
   },
   {
+    id: "order-book",
+    term: "Order book",
+    meaning:
+      "The orders waiting to trade: offers to buy (bids) and to sell (asks), at each price. A market order trades against it, taking the best offers first.",
+  },
+  {
     id: "out-of-sample",
     term: "Out-of-sample",
     meaning: "Past data kept out of sight while a strategy is built, and used only to test it. The more honest result.",
@@ -560,6 +566,13 @@ export const GLOSSARY: Entry[] = [
     term: "R",
     short: "risk multiple",
     meaning: "A trade's result in units of what it risked. With a 5% stop, a 10% gain is +2R and hitting the stop is −1R.",
+  },
+  {
+    id: "random-walk",
+    term: "Random walk",
+    meaning:
+      "Prices that move by chance alone, with no pattern to find. A strategy that seems to work on a random walk has found luck.",
+    strata: "The overfitting machine in the chapter on testing uses random walks.",
   },
   {
     id: "reconciliation",

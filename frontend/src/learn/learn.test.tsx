@@ -8,9 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { fakeApi, healthyRoutes, json, status } from "../test/fakeApi";
+import { CHECKS } from "./checks";
 import { GLOSSARY, sortKey } from "./glossary";
 import { type Session, SessionClock, usSessions } from "./illustrations/Illustrations";
 import { CHAPTERS } from "./LearnPages";
+import { parseProgress, PROGRESS_KEY } from "./progress";
 import { OFFICIAL_DOMAINS, SOURCES } from "./sources";
 import { SHIPPED } from "./useSetup";
 
@@ -125,11 +127,32 @@ describe.each(CHAPTERS)("the chapter “$title”", (chapter) => {
     const headings = [...article.querySelectorAll("section > h2[id]")]
       .map((h) => h.id)
       .filter((id) => id !== "sources");
-    expect(headings).toEqual(chapter.sections.map((s) => s.id));
+    expect(headings).toEqual([...chapter.sections.map((s) => s.id), "quiz"]);
     const contents = within(screen.getByRole("navigation", { name: "In this chapter" }));
     for (const section of chapter.sections) {
       expect(contents.getByRole("link", { name: section.title })).toHaveAttribute("href", `#${section.id}`);
     }
+    expect(contents.getByRole("link", { name: "Check yourself" })).toHaveAttribute("href", "#quiz");
+  });
+
+  it("starts with its main points, and every lab says what its numbers are", async () => {
+    const article = await openChapter();
+    const summary = within(article).getByRole("complementary", { name: "In short" });
+    expect(within(summary).getAllByRole("listitem").length).toBeGreaterThanOrEqual(3);
+    const labs = article.querySelectorAll("section.lab");
+    expect(labs.length).toBeGreaterThanOrEqual(1);
+    for (const lab of labs) {
+      expect(lab.querySelector(".lab__tag")?.textContent).toMatch(/^Try it · /);
+      expect(lab.querySelector(".lab__intro")?.textContent?.trim()).toBeTruthy();
+    }
+  });
+
+  it("ends with questions whose answers exist and are explained", async () => {
+    const article = await openChapter();
+    const quiz = within(article).getByRole("region", { name: "Check yourself" });
+    const groups = within(quiz).getAllByRole("group");
+    expect(groups.length).toBeGreaterThanOrEqual(3);
+    for (const group of groups) expect(within(group).getAllByRole("radio").length).toBeGreaterThanOrEqual(3);
   });
 
   it("says what each picture is: made-up prices, settings, arithmetic, facts or a diagram", async () => {
@@ -327,5 +350,99 @@ describe("market hours", () => {
     const span = `${clock("Asia/Tokyo", "2026-09-25T13:30:00Z")}–${clock("Asia/Tokyo", "2026-09-25T20:00:00Z")}`;
     expect(screen.getByText(new RegExp(`today that is ${span} where you are`))).toBeInTheDocument();
     expect(screen.queryByText("closed all day")).not.toBeInTheDocument();
+  });
+});
+
+describe("checking yourself", () => {
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const question = (prompt: string) => {
+    const group = screen.getByRole("group", { name: new RegExp(escape(prompt)) });
+    return { group, item: within(group.closest("li")!) };
+  };
+
+  async function answerRisk(user: ReturnType<typeof userEvent.setup>, rightOnes: number) {
+    const questions = CHECKS.risk!.quiz(SHIPPED);
+    for (const [i, q] of questions.entries()) {
+      const { group, item } = question(q.prompt);
+      const choice = i < rightOnes ? q.answer : (q.answer + 1) % q.options.length;
+      await user.click(within(group).getByRole("radio", { name: q.options[choice] }));
+      // Explained at once, right or wrong, and the answer can't be changed.
+      expect(item.getByText(i < rightOnes ? "Right." : /^Not quite: the answer is/)).toBeInTheDocument();
+      expect(item.getByText(q.why)).toBeInTheDocument();
+      expect(group).toBeDisabled();
+    }
+    return questions.length;
+  }
+
+  it("explains each answer, scores the quiz, and shows the score on the Learn page", async () => {
+    const user = userEvent.setup();
+    fakeApi(healthyRoutes());
+    const view = open("/learn/risk");
+    await screen.findByRole("heading", { level: 1, name: /Risk/ });
+    const total = await answerRisk(user, 1);
+    expect(within(screen.getByRole("region", { name: "Check yourself" })).getByRole("status")).toHaveTextContent(`1 of ${total} right.`);
+    view.unmount();
+
+    open("/learn");
+    expect(await screen.findByText(`Checked: 1 of ${total} right`)).toBeInTheDocument();
+    expect(screen.getByText(`1 of ${CHAPTERS.length} chapters checked.`)).toBeInTheDocument();
+    // The next chapter to check is the first one not checked.
+    expect(screen.getByRole("link", { name: CHAPTERS[0]!.title })).toHaveAttribute("href", `/learn/${CHAPTERS[0]!.id}`);
+  });
+
+  it("can be tried again, and remembers the last score meanwhile", async () => {
+    const user = userEvent.setup();
+    fakeApi(healthyRoutes());
+    open("/learn/risk");
+    await screen.findByRole("heading", { level: 1, name: /Risk/ });
+    const total = await answerRisk(user, CHECKS.risk!.quiz(SHIPPED).length);
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.queryByText("Right.")).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Last time: ${total} of ${total} right\\.`))).toBeInTheDocument();
+    for (const radio of screen.getAllByRole("radio")) expect(radio).toBeEnabled();
+  });
+
+  it("shows what was opened, and forgets it all when asked", async () => {
+    const user = userEvent.setup();
+    fakeApi(healthyRoutes());
+    const first = open("/learn/markets");
+    await screen.findByRole("heading", { level: 1, name: /Markets/ });
+    first.unmount();
+    open("/learn");
+    expect(await screen.findByText("Opened, not checked yet")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Forget my progress" }));
+    expect(screen.queryByText("Opened, not checked yet")).not.toBeInTheDocument();
+    expect(screen.getByText(/Start with chapter 1/)).toBeInTheDocument();
+    expect(window.localStorage.getItem(PROGRESS_KEY)).toBeNull();
+  });
+
+  it("still works when the browser won't store anything", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage is disabled");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage is disabled");
+    });
+    fakeApi(healthyRoutes());
+    open("/learn/risk");
+    await screen.findByRole("heading", { level: 1, name: /Risk/ });
+    const total = await answerRisk(user, 2);
+    expect(within(screen.getByRole("region", { name: "Check yourself" })).getByRole("status")).toHaveTextContent(`2 of ${total} right.`);
+  });
+
+  it("ignores anything malformed in storage", () => {
+    expect(parseProgress(null)).toEqual({});
+    expect(parseProgress("not json")).toEqual({});
+    expect(parseProgress("[1,2]")).toEqual({});
+    expect(
+      parseProgress(
+        JSON.stringify({
+          risk: { opened: true, quiz: { correct: 3, total: 4 } },
+          orders: { opened: "yes", quiz: { correct: 9, total: 4 } },
+          markets: 7,
+        }),
+      ),
+    ).toEqual({ risk: { opened: true, quiz: { correct: 3, total: 4 } }, orders: {} });
   });
 });

@@ -1,4 +1,5 @@
 import { SplitTimeline } from "../illustrations/Illustrations";
+import { OverfitLab } from "../labs/OverfitLab";
 import { Callout, Cite, Section, Term } from "../Prose";
 import { useSetup } from "../useSetup";
 
@@ -68,6 +69,7 @@ export function TestingChapter() {
             never have happened.
           </li>
         </ul>
+        <OverfitLab />
         <Callout>
           STRATA's strategy settings were written down before any test ({setup.strategies.ma_crossover.fast_period}/
           {setup.strategies.ma_crossover.slow_period} days; RSI {setup.strategies.rsi_reversion.rsi_period},{" "}

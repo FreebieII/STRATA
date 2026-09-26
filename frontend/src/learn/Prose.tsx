@@ -53,6 +53,20 @@ export function Callout({
   );
 }
 
+/** A chapter's main points, before it starts. */
+export function KeyIdeas({ items }: { items: string[] }) {
+  return (
+    <aside className="key-ideas" aria-label="In short">
+      <p className="key-ideas__title">In short</p>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
 export function Formula({ children }: { children: ReactNode }) {
   return <pre className="formula">{children}</pre>;
 }

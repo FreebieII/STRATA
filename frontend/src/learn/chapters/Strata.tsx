@@ -1,7 +1,9 @@
 import { Link } from "react-router";
 
 import { PipelineDiagram } from "../illustrations/Illustrations";
+import { PipelineLab } from "../labs/PipelineLab";
 import { Callout, Section, Term } from "../Prose";
+import { useSetup } from "../useSetup";
 
 export const STRATA_SOURCES = [] as const;
 
@@ -21,6 +23,7 @@ const PHASES: { phase: string; what: string; done?: boolean }[] = [
 ];
 
 export function StrataChapter() {
+  const { setup } = useSetup();
   return (
     <>
       <p className="learn-lede">
@@ -30,6 +33,7 @@ export function StrataChapter() {
 
       <Section id="pipeline" title="The pipeline">
         <PipelineDiagram />
+        <PipelineLab limits={setup.risk_limits} />
       </Section>
 
       <Section id="propose" title="Agents propose, rules decide">

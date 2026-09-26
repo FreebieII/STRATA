@@ -80,12 +80,13 @@ export function Segmented<T extends string>({
   value: T | null;
   onChange: (value: T | null) => void;
 }) {
+  const labelId = useId();
   return (
     <div className="field field--inline">
-      <span className="field__label" id={`seg-${label}`}>
+      <span className="field__label" id={labelId}>
         {label}
       </span>
-      <div className="segmented" role="group" aria-labelledby={`seg-${label}`}>
+      <div className="segmented" role="group" aria-labelledby={labelId}>
         {options.map((option) => (
           <button
             key={option.value ?? "all"}

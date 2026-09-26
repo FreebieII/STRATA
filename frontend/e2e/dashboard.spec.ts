@@ -173,6 +173,14 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await expect(source).toHaveAttribute("rel", /noopener/);
     await page.screenshot({ path: `${SHOTS}learn-strategies.png`, fullPage: true });
 
+    // A lab: shorten the fast average and the strategy trades more.
+    const lab = page.getByRole("region", { name: "Crossover lab: choose the averages, then trade them" });
+    const trades = lab.getByRole("table").getByRole("row");
+    const before = await trades.count();
+    await lab.getByRole("slider", { name: "Fast average" }).fill("5");
+    await expect.poll(() => trades.count()).toBeGreaterThan(before);
+    await page.screenshot({ path: `${SHOTS}learn-lab.png`, fullPage: true });
+
     await page.getByRole("link", { name: "whipsaw" }).first().click();
     await expect(page).toHaveURL(/\/learn\/glossary#whipsaw$/);
     await expect(page.locator("#whipsaw")).toHaveClass(/is-target/);
@@ -180,6 +188,19 @@ test("logs in, shows live data on every page, and logs out", async ({ page }) =>
     await page.getByRole("textbox", { name: "Find" }).fill("slippage");
     await expect(page.getByText(/^\d+ of \d+ match “slippage”\.$/)).toBeVisible();
     await page.screenshot({ path: `${SHOTS}learn-glossary.png` });
+
+    // Follow a stop through an overnight gap, then check yourself.
+    await page.goto("/learn/orders");
+    const orderLab = page.getByRole("region", { name: "Follow one sell order, day by day" });
+    await orderLab.getByRole("button", { name: "Show all" }).click();
+    await expect(orderLab.getByText(/Sold on day 5 at \$91\.20/)).toBeVisible();
+    const quiz = page.getByRole("region", { name: "Check yourself" });
+    const first = quiz.getByRole("group").first();
+    await first.getByRole("radio", { name: "A limit order at $105" }).check();
+    await expect(quiz.getByText("Right.").first()).toBeVisible();
+    await page.screenshot({ path: `${SHOTS}learn-orders.png`, fullPage: true });
+    await menu(page, "How trading works").click();
+    await expect(page.getByText("Opened, not checked yet").first()).toBeVisible();
   });
 
   await test.step("a planned page", async () => {
