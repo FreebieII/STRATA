@@ -14,3 +14,10 @@ logs
 data
 state
 reports
+# The dashboard's certificates (and the CA key), and its build clutter.
+certs
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/e2e/screenshots

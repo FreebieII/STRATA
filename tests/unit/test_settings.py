@@ -40,6 +40,21 @@ def test_test_suite_variables_are_not_settings():
     assert unknown_variables({"STRATA_TEST_DATABASE_URL": "x", "PATH": "/bin"}) == []
 
 
+def test_compose_and_browser_test_variables_are_not_typos():
+    environ = {
+        "STRATA_UID": "1000",
+        "STRATA_GID": "1000",
+        "STRATA_SECRETS_PATH": "./.env",
+        "STRATA_CERTS_DIR": "./certs",
+        "STRATA_DASHBOARD_BIND": "192.168.1.50",
+        "STRATA_DASHBOARD_PORT": "8443",
+        "STRATA_E2E_PASSWORD": "x",
+    }
+    assert unknown_variables(environ) == []
+    # ...but a misspelling of one still is.
+    assert unknown_variables({"STRATA_DASHBOARD_BINDS": "x"}) == ["STRATA_DASHBOARD_BINDS"]
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [

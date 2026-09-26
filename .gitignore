@@ -6,6 +6,12 @@
 !.env.example
 
 # ---------------------------------------------------------------
+# The dashboard's HTTPS certificate and its local CA. The CA's key
+# can vouch for home-network addresses: keep it private.
+# ---------------------------------------------------------------
+certs/
+
+# ---------------------------------------------------------------
 # Files the bot creates while it runs (all rebuilt automatically)
 # ---------------------------------------------------------------
 data/

@@ -28,8 +28,19 @@ from .config import DEFAULT_CONFIG_PATH
 from .credentials import DEFAULT_ENV_PATH
 
 ENV_PREFIX = "STRATA_"
-# Variables with these prefixes belong to the test suite, not the application.
-_NOT_SETTINGS = ("STRATA_TEST_",)
+# Variables with these prefixes belong to the test suites, not the application.
+_NOT_SETTINGS = ("STRATA_TEST_", "STRATA_E2E_")
+# docker-compose.yml and the certificate script read these; STRATA doesn't.
+_TOOLING = frozenset(
+    {
+        "STRATA_UID",
+        "STRATA_GID",
+        "STRATA_SECRETS_PATH",
+        "STRATA_CERTS_DIR",
+        "STRATA_DASHBOARD_BIND",
+        "STRATA_DASHBOARD_PORT",
+    }
+)
 
 
 class SettingsError(Exception):
@@ -74,6 +85,7 @@ def unknown_variables(environ: Mapping[str, str] | None = None) -> list[str]:
         for name in environ
         if name.upper().startswith(ENV_PREFIX)
         and name.upper() not in known
+        and name.upper() not in _TOOLING
         and not name.upper().startswith(_NOT_SETTINGS)
     )
 

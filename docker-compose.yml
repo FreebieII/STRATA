@@ -1,17 +1,23 @@
 # STRATA development and single-machine deployment.
 #
-#   docker compose up --build -d      start PostgreSQL, Redis, migrations and the API
+#   docker compose up --build -d      start PostgreSQL, Redis, migrations, the API
+#                                     and the dashboard (https://localhost:8443)
 #   docker compose ps                 see what is running and healthy
 #   docker compose logs -f api        follow the API's log
 #   docker compose down               stop everything (data is kept)
-#   docker compose --profile test run --build --rm tests    run the full test suite
+#   docker compose --profile test run --build --rm tests            Python tests
+#   docker compose --profile test run --build --rm frontend-tests   dashboard tests
 #
 # Needs a .env file next to this one (copy .env.example) with at least
-# POSTGRES_PASSWORD set. Every published port listens on 127.0.0.1 only, so
-# nothing here is reachable from other machines.
+# POSTGRES_PASSWORD set, and the dashboard's certificate in certs/ (run
+# scripts/make-dashboard-cert.sh once).
 #
-# Services for agents (worker), scheduling (scheduler) and the dashboard
-# (frontend) are added in the phases that give them real work.
+# Every port listens on 127.0.0.1 only, so nothing is reachable from other
+# machines, except the dashboard if you choose: STRATA_DASHBOARD_BIND in .env
+# (default 127.0.0.1) can be this machine's home-network address.
+#
+# Services for agents (worker) and scheduling (scheduler) are added in the
+# phases that give them real work.
 
 name: strata
 
@@ -105,6 +111,34 @@ services:
       retries: 6
     restart: unless-stopped
 
+  frontend:
+    image: strata-frontend:dev
+    build:
+      context: ./frontend
+      target: runtime
+    # Runs as you (like the other containers), so it can read the key, which
+    # only you may read. It can't write anywhere except a scratch /tmp.
+    user: "${STRATA_UID:-1000}:${STRATA_GID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    secrets:
+      - dashboard_cert
+      - dashboard_key
+    ports:
+      - "${STRATA_DASHBOARD_BIND:-127.0.0.1}:${STRATA_DASHBOARD_PORT:-8443}:8443"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+
   tests:
     profiles: ["test"]
     image: strata:test
@@ -124,9 +158,21 @@ services:
       redis:
         condition: service_healthy
 
+  frontend-tests:
+    profiles: ["test"]
+    image: strata-frontend:test
+    build:
+      context: ./frontend
+      target: test
+
 secrets:
   strata_env:
     file: ${STRATA_SECRETS_PATH:-./.env}
+  # Made by scripts/make-dashboard-cert.sh.
+  dashboard_cert:
+    file: ${STRATA_CERTS_DIR:-./certs}/dashboard.crt
+  dashboard_key:
+    file: ${STRATA_CERTS_DIR:-./certs}/dashboard.key
 
 volumes:
   pgdata:
