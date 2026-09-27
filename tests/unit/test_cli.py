@@ -68,6 +68,23 @@ def test_db_commands_need_the_database_password(unreachable, monkeypatch, write_
     assert "POSTGRES_PASSWORD" in capsys.readouterr().err
 
 
+def test_market_data_is_not_fetched_without_the_database(
+    unreachable, monkeypatch, config_dict, write_config, tmp_path, capsys
+):
+    config_dict["paths"]["data_dir"] = str(tmp_path / "data")
+    monkeypatch.setenv("STRATA_CONFIG_FILE", str(write_config(config_dict)))
+    # Every download is recorded, so with no database nothing is downloaded or cached.
+    assert main(["data", "fetch", "--mock"]) == EXIT_UNHEALTHY
+    assert "nothing was done" in capsys.readouterr().err
+    assert not (tmp_path / "data").exists()
+
+
+def test_market_data_dates_must_be_real_days(capsys):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["data", "fetch", "--from", "2024-02-30"])
+    assert "isn't a date like 2024-07-01" in capsys.readouterr().err
+
+
 def test_redis_passwords_are_hidden():
     assert _safe_redis_url("redis://:pw123@redis:6379/0") == "redis://:***@redis:6379/0"
     assert _safe_redis_url("redis://127.0.0.1:6379/0") == "redis://127.0.0.1:6379/0"

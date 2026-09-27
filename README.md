@@ -25,8 +25,8 @@ STRATA is built in 14 phases; [BUILD_PLAN.md](BUILD_PLAN.md) has the details.
 | 1 | Foundation: config, secrets, logging, PostgreSQL, Redis, API, CLI, Docker, tests | **Done** |
 | 1b | Dashboard foundation: operator logins, the HTTPS web dashboard, health, setup, limits, events, audit log | **Done** |
 | 1c | Dashboard charts from real data, and the Learn section: how trading works, and how STRATA does it | **Done** |
-| 2 | Market data: one interface for prices, validation, cached history | Next |
-| 3 | Indicators, technical and quantitative analysis, market regimes | |
+| 2 | Market data: one interface for prices, checks that refuse bad data, cached and recorded history | **Done** |
+| 3 | Indicators, technical and quantitative analysis, market regimes | Next |
 | 4 | Backtesting with fees and slippage, walk-forward tests, experiment records | |
 | 5–6 | Analysis agents, the critic, the supervisor, structured trade proposals | |
 | 7 | Deterministic risk engine, portfolio checks, kill switch | |
@@ -161,6 +161,22 @@ docker compose exec api python check_setup.py --connect
 The last one logs in to your Alpaca **paper** account (read-only) and fetches a
 few prices. It's the first real test of your keys.
 
+Then download the price history that STRATA's backtests will use:
+
+```bash
+docker compose exec api strata data fetch
+```
+
+It fetches daily SPY and BTC/USD bars from `backtest.start_date` in
+`config.yaml` up to the latest finished day, checks every bar, and keeps the
+good ones (in the `strata_data` volume), with a record of each download in the
+database. Each line starts `[ OK ]`, `[REFUSED]` (the checks found a problem;
+nothing was kept, and the line says why) or `[FAIL]` (the download didn't
+work). If SPY fails with a message about SIP data, set
+`historical_stock_feed: iex` in `config.yaml` and run it again.
+`docker compose exec api strata data check` checks every kept file against the
+hash recorded when it was downloaded.
+
 ### 6. Open the dashboard
 
 Make yourself an account (it asks for a password twice; at least 12
@@ -238,6 +254,8 @@ pytest
 | `strata operator list` | Show the dashboard accounts |
 | `strata operator reset-password NAME` | Set a new password; logs out that account's sessions |
 | `strata operator disable NAME` / `enable NAME` | Lock or unlock an account; disabling logs it out everywhere |
+| `strata data fetch` | Download daily bars for every enabled instrument, check them, keep and record the good ones. `--symbol SPY` for one; `--from 2024-01-02 --to 2024-06-28` for other dates; `--mock` for made-up prices (no keys needed, always marked as mock) |
+| `strata data check` | Check every kept price file against the hash recorded when it was downloaded |
 | `strata api` | Run the API (compose does this for you) |
 | `python check_setup.py [--connect]` | Read-only self-check; `--connect` logs in to your paper account |
 | `python main.py --mode backtest\|paper\|live` | The original start-up checks per mode. Paper is the default. No mode trades yet |
@@ -312,6 +330,7 @@ STRATA refuses to start and tells you which. Details:
 | `strata/auth/` | Dashboard accounts: password hashing, sessions, and pausing logins after repeated failures. |
 | `strata/cli.py` | The `strata` command. |
 | `strata/alpaca_clients.py` | Connections to Alpaca with time limits; paper keys always reach the paper server. |
+| `strata/market_data/` | Prices: one interface for Alpaca and made-up prices, the checks that refuse bad data, the market calendar, the file cache and the database record of every download. |
 | `tests/` | Automated tests. `unit/` needs nothing; `integration/` uses a real PostgreSQL and Redis. No test can reach the internet. |
 | `docs/` | Architecture, development, deployment, security and trading-mode guides. |
 
@@ -506,6 +525,15 @@ anything on this machine.
   after a time limit instead of hanging.
 - **`HTTP 401` or `HTTP 403` from Alpaca**: the keys were rejected. Paste the
   **paper** keys again, without spaces. Paper key IDs usually start with `PK`.
+- **`your data plan doesn't include this SIP data`**: set
+  `historical_stock_feed: iex` in `config.yaml`.
+- **`[REFUSED]` from `strata data fetch`**: the prices failed a check (a missing
+  day, a duplicate, an impossible price, a move too big to be real). Nothing
+  was kept. The line and the dashboard's Events page say what was wrong; try
+  again later, and if it keeps happening, the data itself is at fault.
+- **`hasn't finished yet`**: `--to` names a day that isn't over where that
+  market counts its days (New York for stocks, Chicago for crypto). Leave
+  `--to` out to get the latest finished day.
 - **`ssh -T github-strata` says `Connection timed out`**: your network blocks
   SSH's usual port. In `~/.ssh/config`, change `HostName github.com` to
   `HostName ssh.github.com` and add a line `    Port 443`.

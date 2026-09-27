@@ -177,7 +177,8 @@ Docker Compose reads these from `.env` (or your shell). STRATA itself ignores th
 |---|---|
 | Volume `pgdata` | The database |
 | Volume `strata_logs` | `strata.log`, `decisions.log`, `events.jsonl` |
-| Volumes `strata_state`, `strata_data`, `strata_reports` | The bot's memory, price data and reports (later phases) |
+| Volume `strata_data` | Downloaded price history (`market/`): CSV files, each with a JSON description and SHA-256 |
+| Volumes `strata_state`, `strata_reports` | The bot's memory and reports (later phases) |
 | Folder `certs/` | The dashboard certificate, its key, and the local CA (certificate and key) |
 
 Read the logs with, for example, `docker compose exec api tail -n 50 logs/decisions.log`.
@@ -197,6 +198,11 @@ To restore into an empty database (after `docker compose down -v` and
 ```bash
 docker compose exec -T postgres psql -U strata strata < strata-2026-09-25.sql
 ```
+
+The price files in `strata_data` don't need a backup: they can be downloaded
+again, and a file without its record in the database isn't trusted anyway.
+After restoring the database, `docker compose exec api strata data check`
+shows which files still match their records.
 
 Keep backups somewhere other than this machine. They contain your trading
 history and the operators' password hashes, but no API keys (those only live in

@@ -186,6 +186,7 @@ class BacktestSettings(_Section):
 
 class DataSettings(_Section):
     historical_stock_feed: Literal["sip", "iex"]
+    stock_price_adjustment: Literal["all", "split", "raw"] = "all"
 
 
 class PathSettings(_Section):

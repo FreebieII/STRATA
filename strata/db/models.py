@@ -7,6 +7,10 @@
                    migration), so the audit trail can't be quietly edited.
     operators      the people who may log in to the dashboard. Passwords are
                    stored only as scrypt hashes.
+    market_data_metadata
+                   every download of prices: what, from where, which range,
+                   how many bars, the cached file and its SHA-256, and whether
+                   the checks passed (refused downloads are recorded too).
 
 Later phases add their own tables (orders, fills, positions, agent decisions,
 risk decisions, experiments, ...) in their own migrations.
@@ -14,15 +18,18 @@ risk decisions, experiments, ...) in their own migrations.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Identity,
+    Index,
+    Integer,
     String,
     Text,
     false,
@@ -89,3 +96,40 @@ class Operator(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (CheckConstraint(f"username ~ '{USERNAME_PATTERN}'", name="username_format"),)
+
+
+class MarketDataMetadata(Base):
+    __tablename__ = "market_data_metadata"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    # "alpaca" or "mock".
+    provider: Mapped[str] = mapped_column(String(32))
+    symbol: Mapped[str] = mapped_column(String(32))
+    asset_class: Mapped[str] = mapped_column(String(16))
+    timeframe: Mapped[str] = mapped_column(String(16))
+    # "sip" or "iex" for stocks, "none" for crypto; adjustment "all" = splits and dividends.
+    feed: Mapped[str] = mapped_column(String(16))
+    adjustment: Mapped[str] = mapped_column(String(16))
+    range_start: Mapped[date] = mapped_column(Date)
+    range_end: Mapped[date] = mapped_column(Date)
+    bar_count: Mapped[int] = mapped_column(Integer)
+    first_bar_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_bar_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # False: the checks found problems and the data was refused (and not cached).
+    valid: Mapped[bool] = mapped_column(Boolean)
+    issues: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # The cached file's name in the market-data cache (paths.data_dir/market) and its SHA-256.
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    sha256: Mapped[str | None] = mapped_column(String(64))
+
+    __table_args__ = (
+        CheckConstraint("asset_class IN ('stock', 'crypto')", name="asset_class_known"),
+        CheckConstraint("range_start <= range_end", name="range_in_order"),
+        CheckConstraint("bar_count >= 0", name="bar_count_not_negative"),
+        CheckConstraint("sha256 IS NULL OR sha256 ~ '^[0-9a-f]{64}$'", name="sha256_hex"),
+        CheckConstraint("valid OR file_name IS NULL", name="refused_data_not_cached"),
+        Index("ix_market_data_metadata_series", "symbol", "timeframe", "range_start", "range_end"),
+    )

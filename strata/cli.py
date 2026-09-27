@@ -7,6 +7,8 @@
     strata operator create NAME      create a dashboard account (asks for a password)
     strata operator list             show the dashboard accounts
     strata operator reset-password NAME / disable NAME / enable NAME
+    strata data fetch                download daily prices, check them, cache and record them
+    strata data check                check every cached file against its recorded hash
 
 (`python -m strata ...` does the same.) Trading commands arrive in later
 phases (see BUILD_PLAN.md); until then `python main.py` runs the original
@@ -22,7 +24,9 @@ import argparse
 import getpass
 import logging
 import sys
-from datetime import UTC
+from collections.abc import Callable
+from datetime import UTC, date
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from . import __version__
@@ -41,6 +45,7 @@ from .credentials import (
     CredentialsError,
     live_trading_switch_on,
     load_database_password,
+    load_paper_keys,
     read_env_file,
     secret_values,
 )
@@ -52,6 +57,10 @@ from .logging_setup import log_event, register_secrets, setup_logging
 from .redis_client import make_redis
 from .settings import Settings, SettingsError, load_settings
 from .version import code_version
+
+if TYPE_CHECKING:
+    from .market_data.cache import BarCache
+    from .market_data.records import MetadataStore
 
 EXIT_OK = 0
 EXIT_UNHEALTHY = 1
@@ -96,6 +105,33 @@ def build_parser() -> argparse.ArgumentParser:
         operator_commands.add_parser(action, help=help_text).add_argument("username")
     operator_commands.add_parser("list", help="show all accounts")
 
+    data = commands.add_parser("data", help="market data: download, check, cache and record prices")
+    data_commands = data.add_subparsers(dest="data_command", required=True, metavar="ACTION")
+    fetch = data_commands.add_parser(
+        "fetch", help="download daily bars, check them, and cache and record the good ones"
+    )
+    fetch.add_argument(
+        "--symbol", help="one instrument from config.yaml (default: every enabled one)"
+    )
+    fetch.add_argument(
+        "--from",
+        dest="start",
+        type=_day,
+        help="first day, YYYY-MM-DD (default: backtest.start_date)",
+    )
+    fetch.add_argument(
+        "--to",
+        dest="end",
+        type=_day,
+        help="last day, YYYY-MM-DD (default: backtest.end_date, or the latest finished day)",
+    )
+    fetch.add_argument(
+        "--mock",
+        action="store_true",
+        help="made-up prices instead of Alpaca: no keys needed, always marked as mock",
+    )
+    data_commands.add_parser("check", help="check every cached file against its recorded hash")
+
     api = commands.add_parser("api", help="run the HTTP API")
     api.add_argument("--host", help="address to listen on (default: STRATA_API_HOST)")
     api.add_argument("--port", type=int, help="port to listen on (default: STRATA_API_PORT)")
@@ -128,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
             return _db(args.db_command, settings, env)
         if args.command == "operator":
             return _operator(args, settings, env)
+        if args.command == "data":
+            return _data(args, settings, config, env)
         return _api(settings, args.host, args.port)
     except CredentialsError as exc:
         print(f"Not started: {exc}", file=sys.stderr)
@@ -250,6 +288,148 @@ def _db(action: str, settings: Settings, env: dict[str, str]) -> int:
         return EXIT_OK
     finally:
         engine.dispose()
+
+
+# --- data ------------------------------------------------------------------------------
+
+
+def _day(text: str) -> date:
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} isn't a date like 2024-07-01") from None
+
+
+def _data(args: argparse.Namespace, settings: Settings, config: Config, env: dict[str, str]) -> int:
+    from .market_data.cache import BarCache
+    from .market_data.records import DatabaseMetadataStore
+
+    cache = BarCache(config.paths.data_dir / "market")
+    engine = engine_from_settings(settings, load_database_password(env))
+    try:
+        for check in (check_database, check_schema):
+            health = check(engine)
+            if not health.ok:
+                print(
+                    f"The {health.name} isn't ready ({health.detail}). Every download is recorded "
+                    "in the database, so nothing was done. Run `strata status`.",
+                    file=sys.stderr,
+                )
+                return EXIT_UNHEALTHY
+        metadata = DatabaseMetadataStore(session_factory(engine), component=settings.component)
+        if args.data_command == "check":
+            return _data_check(cache, metadata)
+        return _data_fetch(args, config, env, cache, metadata)
+    finally:
+        engine.dispose()
+
+
+def _data_fetch(
+    args: argparse.Namespace,
+    config: Config,
+    env: dict[str, str],
+    cache: BarCache,
+    metadata: MetadataStore,
+) -> int:
+    from .alpaca_clients import crypto_data_client, stock_data_client, trading_client
+    from .market_data.alpaca import AlpacaMarketData
+    from .market_data.calendars import AlpacaCalendar, EveryDay, TradingCalendar, default_calendar
+    from .market_data.mock import MockMarketData
+    from .market_data.models import AssetClass
+    from .market_data.providers import MarketDataError, MarketDataProvider
+    from .market_data.service import BadMarketData, MarketData
+
+    wanted = args.symbol.strip().upper() if args.symbol else None
+    instruments = [i for i in config.enabled_instruments if wanted in (None, i.symbol)]
+    if not instruments:
+        print(f"{wanted} isn't an enabled instrument in config.yaml.", file=sys.stderr)
+        return EXIT_REFUSED
+    start = args.start or config.backtest.start_date
+
+    provider: MarketDataProvider
+    calendars: Callable[[AssetClass], TradingCalendar]
+    if args.mock:
+        provider = MockMarketData()
+        calendars = default_calendar
+        print("Using made-up prices (--mock). They are marked as mock wherever they go.\n")
+    else:
+        keys = load_paper_keys(env)
+        provider = AlpacaMarketData(
+            stock_data_client(keys),
+            crypto_data_client(keys),
+            stock_feed=config.data.historical_stock_feed,
+            adjustment=config.data.stock_price_adjustment,
+        )
+        stock_calendar = AlpacaCalendar(trading_client(keys))
+
+        def calendars(asset_class: AssetClass) -> TradingCalendar:
+            return EveryDay() if asset_class == "crypto" else stock_calendar
+
+    service = MarketData(provider, cache, metadata, calendars=calendars)
+    refused = failed = 0
+    for instrument in instruments:
+        # Up to the latest finished day for this market, unless told otherwise.
+        end = (
+            args.end
+            or config.backtest.end_date
+            or service.latest_finished_day(instrument.asset_class)
+        )
+        try:
+            loaded = service.daily_bars(instrument.symbol, instrument.asset_class, start, end)
+        except BadMarketData as exc:
+            refused += 1
+            print(f"[REFUSED] {instrument.symbol}: {exc.report.summary()}")
+            continue
+        except (MarketDataError, ValueError) as exc:
+            failed += 1
+            print(f"[FAIL] {instrument.symbol}: {exc}")
+            continue
+        series = loaded.series
+        origin = (
+            "reused from the cache" if loaded.from_cache else f"downloaded from {series.source}"
+        )
+        where = f" ({loaded.cached.path.name})" if loaded.cached else ""
+        print(
+            f"[ OK ] {series.symbol}: {len(series.bars):,} daily bars, {series.bars[0].day} to "
+            f"{series.bars[-1].day}, {origin}; every check passed{where}"
+        )
+    if refused:
+        print("\nRefused data is recorded in the database, and never cached or used.")
+    return EXIT_OK if not (refused or failed) else EXIT_UNHEALTHY
+
+
+def _data_check(cache: BarCache, metadata: MetadataStore) -> int:
+    from .market_data.cache import CacheError
+    from .market_data.validation import validate_bars
+
+    files = cache.files()
+    if not files:
+        print("No market data is cached yet. Run: strata data fetch")
+        return EXIT_OK
+    problems = 0
+    for path in files:
+        try:
+            key = cache.key_of(path)
+            recorded = metadata.recorded_sha256(key)
+            loaded = cache.load(key, expected_sha256=recorded)
+        except CacheError as exc:
+            problems += 1
+            print(f"[FAIL] {path.name}: {exc}")
+            continue
+        if loaded is None:
+            continue
+        series, file = loaded
+        report = validate_bars(series)
+        if not report.ok:
+            problems += 1
+            print(f"[FAIL] {path.name}: {report.summary()}")
+        elif recorded is None:
+            print(
+                f"[WARN] {path.name}: no record in the database; the next fetch downloads it again"
+            )
+        else:
+            print(f"[ OK ] {path.name}: {file.bar_count:,} bars; hash matches its record")
+    return EXIT_OK if not problems else EXIT_UNHEALTHY
 
 
 # --- operator ----------------------------------------------------------------------------

@@ -8,7 +8,7 @@ place, an order a strategy shouldn't send, an AI agent that is wrong.
 
 | Secret | Lives in | Read by |
 |---|---|---|
-| Alpaca paper keys | `.env` | backtest and paper mode, `check_setup.py` |
+| Alpaca paper keys | `.env` | backtest and paper mode, `strata data fetch` (read-only market data), `check_setup.py` |
 | Alpaca live keys | `.env` | only `modes.unlock_live_mode()`, after the live-mode lock passes |
 | `POSTGRES_PASSWORD` | `.env` | the database container and everything that connects to it |
 | `ADMIN_API_TOKEN` | `.env` | the API, to check requests from scripts |
@@ -157,6 +157,16 @@ the CA 5 years.
   and `TRUNCATE`, so recorded history can't be edited by application code.
 - Every statement has a time limit, and connections time out.
 - Addresses are only ever printed with the password hidden.
+
+## Market data
+
+- Price history is fetched with the paper keys, read-only, from Alpaca's data
+  API. Nothing about fetching prices can place an order.
+- Each cached price file's SHA-256 is recorded in `market_data_metadata`, and a
+  file that doesn't match is downloaded again. This catches damage and casual
+  edits; someone who can change both the files and the database can defeat it,
+  so the files are no stronger than the machine's own security.
+- Prices that fail a check are refused rather than repaired (BUILD_PLAN D26).
 
 ## Containers
 

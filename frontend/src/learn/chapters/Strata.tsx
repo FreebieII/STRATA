@@ -10,7 +10,8 @@ export const STRATA_SOURCES = [] as const;
 const PHASES: { phase: string; what: string; done?: boolean }[] = [
   { phase: "1", what: "Foundation: settings, secrets, logging, database, API, Docker", done: true },
   { phase: "1b", what: "This dashboard, logins and HTTPS", done: true },
-  { phase: "2", what: "Market data: one way in for prices, with checks for bad data" },
+  { phase: "1c", what: "Charts from real data, and this Learn section", done: true },
+  { phase: "2", what: "Market data: one way in for prices, with checks for bad data", done: true },
   { phase: "3", what: "Indicators, analysis, market regimes" },
   { phase: "4", what: "Backtesting, with costs and out-of-sample results" },
   { phase: "5–6", what: "Analysis agents, the critic, the supervisor" },
@@ -60,7 +61,7 @@ export function StrataChapter() {
       <Section id="wrong" title="When something goes wrong">
         <p>
           How STRATA will handle trouble once it trades, and the phase that brings each part. Of
-          these, only the event and audit logs exist today.
+          these, the checks that refuse bad price data and the event and audit logs exist today.
         </p>
         <ul>
           <li><strong>Unsure means stop.</strong> Stale data, a broker that doesn't answer, or an order in an unknown state: STRATA doesn't trade until it knows. (Phases 2, 8)</li>

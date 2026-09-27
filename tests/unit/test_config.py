@@ -44,6 +44,7 @@ def test_shipped_config_is_valid():
     config = load_config(PROJECT_ROOT / "config.yaml")
     assert config.timezone == "America/New_York"
     assert config.data.historical_stock_feed == "sip"
+    assert config.data.stock_price_adjustment == "all"
 
 
 def test_shipped_risk_limits_match_the_requirements():
@@ -288,6 +289,17 @@ def test_unknown_time_zone_rejected(expect_problem, zone):
 
 def test_unknown_stock_feed_rejected(expect_problem):
     expect_problem(lambda c: c["data"].update({"historical_stock_feed": "best"}), "data.")
+
+
+def test_unknown_price_adjustment_rejected(expect_problem):
+    expect_problem(lambda c: c["data"].update({"stock_price_adjustment": "dividend"}), "data.")
+
+
+def test_prices_are_adjusted_for_splits_and_dividends_unless_told_otherwise(
+    config_dict, write_config
+):
+    del config_dict["data"]["stock_price_adjustment"]
+    assert load_config(write_config(config_dict)).data.stock_price_adjustment == "all"
 
 
 def test_unknown_log_level_rejected(expect_problem):

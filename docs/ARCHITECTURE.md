@@ -22,7 +22,7 @@ Agents propose, deterministic code decides. The execution engine will only
 accept orders carrying an approval recorded by the risk engine, and will re-check
 the limits immediately before sending.
 
-## What exists after Phase 1c
+## What exists after Phase 2
 
 | Piece | Module | Does |
 |---|---|---|
@@ -38,12 +38,13 @@ the limits immediately before sending.
 | API | `strata/api/` | FastAPI: health, readiness, status, events, audit log, chart statistics, login/logout; session or bearer-token auth; request IDs |
 | Health history | `strata/api/health_history.py` | A background thread that checks health every 15 s and keeps 24 hours of readings in memory; writes `health_failed` / `health_recovered` events |
 | Chart statistics | `strata/api/stats.py`, `strata/api/store.py` | Events and audit entries counted per day in the viewer's time zone, by PostgreSQL |
-| CLI | `strata/cli.py` | `strata status`, `strata db upgrade/current`, `strata operator ...`, `strata api` |
+| Market data | `strata/market_data/` | Bars, quotes, trades and order books as STRATA's own types; the Alpaca and mock providers behind one interface; the market calendar; the checks that refuse bad data; the file cache; the record of every download |
+| CLI | `strata/cli.py` | `strata status`, `strata db upgrade/current`, `strata operator ...`, `strata data fetch/check`, `strata api` |
 | Dashboard | `frontend/src/` | React and TypeScript, built by Vite into static files; reads the API only. Charts in `charts/` |
 | Learn section | `frontend/src/learn/` | Chapters, glossary, official-source registry and illustrations; loaded only when opened |
 | HTTPS front door | `frontend/nginx/` | nginx: TLS, security headers, the static dashboard, `/api/` passed to the API |
 | Certificates | `scripts/make-dashboard-cert.sh` | A local CA limited to home-network names, and the dashboard's certificate |
-| Alpaca clients | `strata/alpaca_clients.py` | Connections with time limits; becomes part of the broker and data adapters |
+| Alpaca clients | `strata/alpaca_clients.py` | Connections with time limits, used by the market data provider now and the broker adapter later |
 | Containers | `Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` | postgres, redis, migrate, api, frontend; tests and frontend-tests |
 
 ## The dashboard and the API
@@ -116,6 +117,45 @@ rules. Their arithmetic is in `labs/sim.ts`, pure functions checked by hand in
 were opened and each quiz's score are kept in the browser (localStorage) and
 shown on the Learn index; nothing about them reaches the API.
 
+## Market data
+
+Everything that needs prices asks `MarketData` (`strata/market_data/service.py`),
+never Alpaca directly:
+
+```
+ MarketData.daily_bars(symbol, asset class, start, end)      end: a finished day only
+   │
+   ├─ a cached file for exactly this request, recorded in the database,
+   │  its SHA-256 matching that record, and still passing the checks?  ──► use it
+   │
+   └─ otherwise ask the provider ─────► AlpacaMarketData (paper keys, read-only)
+                                        or MockMarketData (made-up, marked "mock")
+          │
+          ▼
+      validate_bars: gaps against the market calendar, duplicates, order,
+      impossible prices, huge moves, unfinished bars
+          │
+          ├─ a problem ─► row in market_data_metadata (valid = false, the issues),
+          │               market_data_refused event, BadMarketData raised; nothing cached
+          │
+          └─ clean ─────► CSV + JSON description + SHA-256 in paths.data_dir/market,
+                          row in market_data_metadata, market_data_fetched event
+```
+
+| Module | Does |
+|---|---|
+| `models.py` | `Bar`, `BarSeries`, `Quote`, `Trade`, `OrderBook`: frozen, with every time in UTC |
+| `providers.py` | The `MarketDataProvider` interface and `MarketDataError` |
+| `alpaca.py` | Stock bars from the configured feed (`sip` or `iex`), adjusted as `data.stock_price_adjustment` says; crypto bars; latest quote, trade and (crypto) order book; failures explained in plain words |
+| `mock.py` | Made-up prices from a fixed seed: the same bar for a day whatever range is asked for, and known defects on request for testing the checks |
+| `calendars.py` | Trading days (Alpaca's calendar for stocks, every day for crypto), where each market's days begin, and the latest finished day |
+| `validation.py` | The checks (BUILD_PLAN D26) |
+| `cache.py` | Files written whole and never changed; read back only if the hash matches (D27) |
+| `records.py` | Writes `market_data_metadata` rows and events; reads back recorded hashes |
+
+A daily bar covers one day where its market counts days: New York for stocks,
+Chicago for crypto. It counts as finished 25 hours after it starts (D28).
+
 ## Three kinds of settings
 
 ```
@@ -149,14 +189,14 @@ message instead of falling back to a default.
 | `system_events` | Start-up, shutdown, failed logins, migrations, health problems | Severity must be one of debug/info/warning/error/critical |
 | `audit_logs` | Who did what, to what, when, with details | Append-only: a trigger rejects UPDATE, DELETE, TRUNCATE |
 | `operators` | Dashboard accounts: name, scrypt hash, disabled, created, password changed, last login | Names are lowercase letters, digits and `._-`, 3–64 characters, unique |
+| `market_data_metadata` | Every download of prices: provider, symbol, asset class, timeframe, feed, adjustment, range, bar count, first and last bar, whether it passed, its problems, the cached file and its SHA-256 | Refused data has no file; a hash is 64 hexadecimal characters; the range is in order |
 
 Redis holds, with expiry times: each session (keyed by a SHA-256 hash of its
 ID, with an index per operator so all of one operator's sessions can be ended)
 and login-failure counters per name and per address (15 minutes). Losing Redis
 logs everyone out and resets the counters; nothing else is lost.
 
-Later phases add, each in its own migration: accounts, assets, market data
-metadata, signals, agent decisions, trade proposals, risk decisions, orders,
+Later phases add, each in its own migration: accounts, assets, signals, agent decisions, trade proposals, risk decisions, orders,
 fills, positions, portfolio snapshots, performance metrics, backtests,
 experiments, strategy versions and risk events.
 
@@ -177,5 +217,9 @@ Every log record goes to three places: readable `strata.log`, the JSON
   is down and keeps retrying.
 - Database behind the code's migrations: the schema check fails until
   `strata db upgrade` runs (compose runs it before the API starts).
+- Prices that fail a check are refused, recorded and never cached; a cached
+  file that no longer matches its recorded hash is downloaded again. With no
+  database, `strata data fetch` downloads nothing, because every download must
+  be recorded.
 - From Phase 7 onward, the same rule applies to trading: if data, the broker,
   the database or an order's state is uncertain, STRATA doesn't trade.

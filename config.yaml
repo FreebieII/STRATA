@@ -115,9 +115,16 @@ backtest:
 #             accounts may use it for anything older than 15 minutes.
 #     "iex" = a single exchange: less accurate daily prices. Use it only
 #             if "sip" gives you a permissions error.
+#   stock_price_adjustment: how past stock prices are adjusted.
+#     "all"   = for splits and dividends, so returns include dividends
+#               and a split never looks like a crash (BUILD_PLAN D25).
+#     "split" = for splits only: prices drop on each dividend day.
+#     "raw"   = as traded on the day.
+#   Orders and stops always use live prices, whatever this says.
 # ---------------------------------------------------------------------
 data:
   historical_stock_feed: sip
+  stock_price_adjustment: all
 
 # ---------------------------------------------------------------------
 # Folders the bot writes to. They are created automatically and git

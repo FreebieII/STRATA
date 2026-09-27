@@ -59,6 +59,14 @@ database.
 and to private addresses (where the test services live). Anything else, such as
 Alpaca, raises an error. No test can place an order or needs real keys.
 
+**Market data without keys.** `strata data fetch --mock` fills the cache with
+made-up prices from a fixed seed, marked `mock` in every file name and record,
+so the rest of STRATA can be tried before Alpaca keys are set up. In tests,
+`MockMarketData(defects={"SPY": ["gap"]})` makes data with a known problem
+(`duplicate`, `gap`, `bad_price`, `inconsistent`, `spike`, `out_of_order`) to
+check that it is refused. The Alpaca provider's tests use fake clients that
+answer with alpaca-py's own model classes, so no test reaches Alpaca.
+
 **Safety rules need proof.** Every safety check has a test that fails if the
 check is removed. When you add a check, break it on purpose and confirm a test
 goes red before you trust it.
@@ -207,6 +215,7 @@ strata/             the application package
   credentials.py    the .env secrets file
   logging_setup.py  text logs, decisions log, JSON events, redaction
   health.py         database, schema and Redis checks
+  market_data/      prices: providers, calendar, checks, cache, records
   modes.py          backtest / paper / live and the live-mode lock
 migrations/         Alembic migrations
 frontend/           the dashboard
