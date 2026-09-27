@@ -161,7 +161,11 @@ def login_api(migrated_url, write_env, write_config, config_dict):
         config_file=write_config(config_dict),
         component="api",
     )
-    with TestClient(create_app(build_services(settings)), base_url="https://testserver") as client:
+    # Each test calls from its own address: Redis keeps the per-address login
+    # limit for 15 minutes, so a shared one would add up across test runs.
+    address = f"2001:db8::{uuid.uuid4().hex[:4]}:{uuid.uuid4().hex[:4]}"
+    app = create_app(build_services(settings))
+    with TestClient(app, base_url="https://testserver", client=(address, 50000)) as client:
         yield client, name, engine
     engine.dispose()
 
